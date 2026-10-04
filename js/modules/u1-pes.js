@@ -17,7 +17,7 @@ App.register({
     const spectrum = Z => ELEMENTS.config(Z).map(x => ({ sub: x.sub, e: x.e, be: BE[Z - 1][x.sub] })).filter(p => p.be);
 
     let Z = U.store.get('pesZ', 11), Z2 = 0, mystery = false, guess = null, hover = null;
-    const opts = ELEMENTS.list.slice(0, 36).map(e => ({ value: e.Z, label: `${e.Z} · ${e.name}` }));
+    const opts = ELEMENTS.list.slice(0, 36).map(e => ({ value: e.Z, label: `${e.Z}  ${e.name}` }));
     const s1 = U.select({ label: 'Element', options: opts, value: Z, onChange: v => { Z = +v; U.store.set('pesZ', Z); update(); } });
     const s2 = U.select({ label: 'Compare with', options: [{ value: 0, label: 'None' }].concat(opts), value: 0, onChange: v => { Z2 = +v; update(); } });
     const mys = U.check({ label: 'Mystery spectrum (identify the element)', onChange: v => { mystery = v; guess = null; if (v) { Z = U.randInt(3, 36); Z2 = 0; s2.set(0); } update(); } });
@@ -75,7 +75,7 @@ App.register({
       U.clear(hoverBox);
       if (!hover) { hoverBox.appendChild(U.callout('Hover over a peak to see what it represents.')); return; }
       const p = hover.p, e = ELEMENTS.byZ[hover.z];
-      hoverBox.appendChild(U.callout(`<b>${mystery && hover.z === Z ? 'Unknown' : e.name} — ${p.sub} peak</b><br>Binding energy ${p.be} MJ/mol (${(p.be * 1000).toLocaleString()} kJ/mol)<br>${p.e} electron${p.e > 1 ? 's' : ''} in this subshell${p.be < 3 && p === spectrum(hover.z).slice(-1)[0] ? '. These are the valence electrons, the easiest to remove: this peak approximates the first ionization energy.' : '.'}`));
+      hoverBox.appendChild(U.callout(`<b>${mystery && hover.z === Z ? 'Unknown' : e.name}, ${p.sub} peak</b><br>Binding energy ${p.be} MJ/mol (${(p.be * 1000).toLocaleString()} kJ/mol)<br>${p.e} electron${p.e > 1 ? 's' : ''} in this subshell${p.be < 3 && p === spectrum(hover.z).slice(-1)[0] ? '. These are the valence electrons, the easiest to remove: this peak approximates the first ionization energy.' : '.'}`));
     }
     function update() {
       s1.set(Z); s1.el.hidden = mystery; s2.el.hidden = mystery;

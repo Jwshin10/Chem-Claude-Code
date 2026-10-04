@@ -1,7 +1,7 @@
 // Bundles index.html + css + js into single self-contained HTML files.
 //   node tools/build.mjs
 // Outputs:
-//   dist/ap-chem-visualizer.html  - full standalone page (open it anywhere, works offline except web fonts)
+//   dist/valence.html  - full standalone page (open it anywhere, works offline except web fonts)
 //   dist/artifact.html            - same content without <html>/<head>/<body> wrappers (for hosts that add their own)
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -20,7 +20,7 @@ if (js.includes('</script')) throw new Error('A script contains "</script" and c
 html = html.replace(/<!-- build:js -->[\s\S]*?<!-- \/build:js -->/, () => `<script>\n${js}\n</script>`);
 
 mkdirSync(join(root, 'dist'), { recursive: true });
-writeFileSync(join(root, 'dist/ap-chem-visualizer.html'), html);
+writeFileSync(join(root, 'dist/valence.html'), html);
 
 // fragment version: keep <title>, font links and styles first, then the body markup and script
 const head = html.match(/<head>([\s\S]*?)<\/head>/)[1].replace(/<meta charset[^>]*>\s*/, '').replace(/<meta name="viewport"[^>]*>\s*/, '');

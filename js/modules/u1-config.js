@@ -14,10 +14,10 @@ App.register({
   render(el, scope) {
     const h = U.h;
     let Z = U.store.get('ecZ', 26), charge = 0, building = null;
-    const elSel = U.select({ label: 'Element', options: ELEMENTS.list.map(e => ({ value: e.Z, label: `${e.Z} · ${e.name} (${e.sym})` })), value: Z, onChange: v => { Z = +v; charge = 0; chSeg.set(0); stop(); update(); } });
+    const elSel = U.select({ label: 'Element', options: ELEMENTS.list.map(e => ({ value: e.Z, label: `${e.Z}  ${e.name} (${e.sym})` })), value: Z, onChange: v => { Z = +v; charge = 0; chSeg.set(0); stop(); update(); } });
     const chSeg = U.seg({ options: [-3, -2, -1, 0, 1, 2, 3].map(q => ({ value: q, label: q === 0 ? 'neutral' : (q > 0 ? q + '+' : -q + '−') })), value: 0, onChange: v => { charge = v; stop(); update(); } });
     const buildBtn = U.btn('▶ Fill electrons one at a time', () => build(), 'primary');
-    const nav = h('div', { class: 'row' }, U.btn('← Prev', () => { if (Z > 1) { Z--; elSel.set(Z); charge = 0; chSeg.set(0); stop(); update(); } }, 'sm'), U.btn('Next →', () => { if (Z < 118) { Z++; elSel.set(Z); charge = 0; chSeg.set(0); stop(); update(); } }, 'sm'));
+    const nav = h('div', { class: 'row' }, U.btn('Previous element', () => { if (Z > 1) { Z--; elSel.set(Z); charge = 0; chSeg.set(0); stop(); update(); } }, 'sm'), U.btn('Next element', () => { if (Z < 118) { Z++; elSel.set(Z); charge = 0; chSeg.set(0); stop(); update(); } }, 'sm'));
     const head = h('div', { class: 'stack' });
     const statBox = U.stats([['e', 'Electrons'], ['val', 'Outer-shell e⁻'], ['unp', 'Unpaired e⁻'], ['mag', 'Magnetism']]);
     const notes = h('div', { class: 'stack' });

@@ -10,16 +10,16 @@ const App = {
   modules: [],
   byId: {},
   units: [
-    { n: 1, title: 'Atomic Structure & Properties' },
-    { n: 2, title: 'Compound Structure & Properties' },
-    { n: 3, title: 'Intermolecular Forces & Properties' },
-    { n: 4, title: 'Chemical Reactions' },
-    { n: 5, title: 'Kinetics' },
-    { n: 6, title: 'Thermodynamics' },
-    { n: 7, title: 'Equilibrium' },
-    { n: 8, title: 'Acids & Bases' },
-    { n: 9, title: 'Applications of Thermodynamics' },
-    { n: 0, title: 'Study Tools' },
+    { n: 1, title: 'Atomic structure & properties', short: 'Atoms' },
+    { n: 2, title: 'Compound structure & properties', short: 'Bonding' },
+    { n: 3, title: 'Intermolecular forces & properties', short: 'IMFs & gases' },
+    { n: 4, title: 'Chemical reactions', short: 'Reactions' },
+    { n: 5, title: 'Kinetics', short: 'Kinetics' },
+    { n: 6, title: 'Thermochemistry', short: 'Thermo' },
+    { n: 7, title: 'Equilibrium', short: 'Equilibrium' },
+    { n: 8, title: 'Acids & bases', short: 'Acids & bases' },
+    { n: 9, title: 'Applications of thermodynamics', short: 'Free energy' },
+    { n: 0, title: 'Study tools', short: 'Study tools' },
   ],
   register(m) {
     m.tags = m.tags || [];
@@ -163,14 +163,14 @@ U.theme = () => {
   if (themeCache) return themeCache;
   const cs = getComputedStyle(document.documentElement);
   const g = n => cs.getPropertyValue('--' + n).trim();
+  // canvases are drawn on the dark lab bench in both themes
   themeCache = {
-    bg: g('bg'), surface: g('surface'), surface2: g('surface-2'), surface3: g('surface-3'),
-    ink: g('ink'), ink2: g('ink-2'), ink3: g('ink-3'), line: g('line'), accent: g('accent'),
-    good: g('good'), warn: g('warn'), bad: g('bad'),
-    red: g('c-red'), blue: g('c-blue'), green: g('c-green'), orange: g('c-orange'), purple: g('c-purple'),
-    teal: g('c-teal'), pink: g('c-pink'), yellow: g('c-yellow'), gray: g('c-gray'),
-    dark: document.documentElement.dataset.theme === 'dark' ||
-      (document.documentElement.dataset.theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches),
+    bg: g('paper'), surface: g('bench'), surface2: g('bench-2'), surface3: g('bench-3'),
+    ink: g('bench-ink'), ink2: g('bench-ink-2'), ink3: g('bench-ink-3'), line: g('bench-line'), accent: g('b-accent'),
+    good: g('b-good'), warn: g('b-warn'), bad: g('b-bad'),
+    red: g('b-red'), blue: g('b-blue'), green: g('b-green'), orange: g('b-orange'), purple: g('b-purple'),
+    teal: g('b-teal'), pink: g('b-pink'), yellow: g('b-yellow'), gray: g('b-gray'),
+    dark: true,
     u: n => g('u' + n),
   };
   return themeCache;
@@ -235,8 +235,8 @@ U.drawAtom = (ctx, x, y, r, el, opts = {}) => {
   }
   ctx.globalAlpha = 1;
 };
-U.FONT = '"IBM Plex Sans", system-ui, sans-serif';
-U.MONO = '"IBM Plex Mono", ui-monospace, monospace';
+U.FONT = '"Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, sans-serif';
+U.MONO = '"Atkinson Hyperlegible Mono", ui-monospace, monospace';
 
 /** arrow from (x1,y1) to (x2,y2) */
 U.arrow = (ctx, x1, y1, x2, y2, color, w = 2, head = 9) => {

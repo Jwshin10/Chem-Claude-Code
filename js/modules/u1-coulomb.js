@@ -15,7 +15,7 @@ App.register({
       {
         label: 'Shell model', render(b, s) {
           let A = 11, B = 17;
-          const opts = ELEMENTS.list.slice(0, 56).map(e => ({ value: e.Z, label: `${e.Z} · ${e.name}` }));
+          const opts = ELEMENTS.list.slice(0, 56).map(e => ({ value: e.Z, label: `${e.Z}  ${e.name}` }));
           const panels = [];
           const make = (getZ, setZ) => {
             const sel = U.select({ label: 'Atom', options: opts, value: getZ(), onChange: v => { setZ(+v); refresh(); } });

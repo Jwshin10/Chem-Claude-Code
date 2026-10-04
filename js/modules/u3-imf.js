@@ -174,7 +174,7 @@ App.register({
     /* ---------- tab 2: particle simulation ---------- */
     function simulation(b, s) {
       let sub = SUBSTANCES.byId[U.store.get('imfSim', 'H2O')] || SUBSTANCES.byId.H2O, Tc = 25;
-      const opts = SUBSTANCES.list.map(x => ({ value: x.id, label: `${U.chemText(x.f)} — ${x.name} (bp ${x.bp} °C)` }));
+      const opts = SUBSTANCES.list.map(x => ({ value: x.id, label: `${U.chemText(x.f)}, ${x.name} (bp ${x.bp} °C)` }));
       const sel = U.select({ label: 'Substance', options: opts, value: sub.id, onChange: v => { sub = SUBSTANCES.byId[v]; U.store.set('imfSim', v); reset(); info(); } });
       const tS = U.slider({ label: 'Temperature', min: -273, max: 400, step: 1, value: Tc, unit: '°C', onInput: v => { Tc = Math.max(-272, v); info(); } });
       const quick = h('div', { class: 'row' }, U.btn('Set to 25 °C', () => { Tc = 25; tS.set(25); info(); }, 'sm'), U.btn('Just below bp', () => { Tc = sub.bp - 15; tS.set(Tc); info(); }, 'sm'), U.btn('Just above bp', () => { Tc = sub.bp + 25; tS.set(Tc); info(); }, 'sm'));
@@ -267,7 +267,7 @@ App.register({
     function compare(b, s) {
       let A = U.store.get('imfA', 'H2O'), B = U.store.get('imfB', 'H2S');
       if (!SUBSTANCES.byId[A]) A = 'H2O'; if (!SUBSTANCES.byId[B]) B = 'H2S';
-      const opts = SUBSTANCES.list.map(x => ({ value: x.id, label: `${U.chemText(x.f)} — ${x.name}` }));
+      const opts = SUBSTANCES.list.map(x => ({ value: x.id, label: `${U.chemText(x.f)}, ${x.name}` }));
       const sA = U.select({ label: 'Substance A', options: opts, value: A, onChange: v => { A = v; U.store.set('imfA', v); upd(); } });
       const sB = U.select({ label: 'Substance B', options: opts, value: B, onChange: v => { B = v; U.store.set('imfB', v); upd(); } });
       const pairs = [['H2O', 'H2S'], ['HF', 'HCl'], ['HCl', 'HI'], ['C5H12n', 'C(CH3)4b'], ['C2H5OH', 'CH3OCH3'], ['F2', 'I2'], ['CH4', 'C8H18'], ['I2', 'H2O'], ['CH3COCH3', 'C4H10'], ['NH3', 'PH3']];

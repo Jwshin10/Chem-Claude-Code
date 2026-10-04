@@ -1,4 +1,6 @@
-# AP Chem Visualizer
+# Valence
+
+**AP Chemistry, visualized.** Named for valence electrons, the idea behind almost every tool here.
 
 Interactive visualizations for every unit of the AP Chemistry course: 38 tools covering all 9 units, plus a reference sheet and a practice quiz. Each topic page lists the key ideas for the AP exam next to the interactive model.
 
@@ -6,7 +8,7 @@ No install, no build step, no internet needed (except for web fonts).
 
 ## Open it
 
-- **Easiest:** download [`dist/ap-chem-visualizer.html`](dist/ap-chem-visualizer.html) and double-click it. It is one self-contained file.
+- **Easiest:** download [`dist/valence.html`](dist/valence.html) and double-click it. It is one self-contained file.
 - **From the source:** open `index.html` in any modern browser.
 - **Host it:** in the GitHub repo go to *Settings → Pages*, choose *Deploy from a branch*, pick your branch and the `/ (root)` folder. The site appears at `https://<user>.github.io/<repo>/`.
 
