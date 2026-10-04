@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AP Chem Visualizer</title>
+<meta name="description" content="Interactive visualizations for every unit of AP Chemistry: IMFs, Lewis structures, VSEPR, kinetics, equilibrium, titrations, electrochemistry and more.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<!-- build:css -->
+<link rel="stylesheet" href="css/style.css">
+<!-- /build:css -->
+</head>
+<body>
+<header class="topbar">
+  <button class="icon-btn" id="menuBtn" type="button" aria-label="Open topics menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <a class="brand" href="#home"><span class="brand-tile">Cv</span><span class="brand-name">AP Chem <span>Visualizer</span></span></a>
+  <div class="spacer"></div>
+  <button class="icon-btn" id="themeBtn" type="button" aria-label="Toggle dark mode"></button>
+</header>
+<div class="layout">
+  <aside class="sidebar" aria-label="Topics">
+    <div class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <input id="search" type="text" placeholder="Search topics" autocomplete="off" spellcheck="false" aria-label="Search topics">
+      <kbd>/</kbd>
+    </div>
+    <nav id="nav"></nav>
+  </aside>
+  <div class="scrim" id="scrim"></div>
+  <main id="main"></main>
+</div>
+<!-- build:js -->
+<script src="js/core.js"></script>
+<script src="js/data/elements.js"></script>
+<script src="js/data/molecules.js"></script>
+<script src="js/data/builder.js"></script>
+<script src="js/modules/u1-moles.js"></script>
+<script src="js/modules/u1-massspec.js"></script>
+<script src="js/modules/u1-periodic.js"></script>
+<script src="js/modules/u1-config.js"></script>
+<script src="js/modules/u1-pes.js"></script>
+<script src="js/modules/u1-coulomb.js"></script>
+<script src="js/modules/u2-bonding.js"></script>
+<script src="js/modules/u2-potential.js"></script>
+<script src="js/modules/u2-solids.js"></script>
+<script src="js/modules/u2-lewis.js"></script>
+<script src="js/modules/u2-vsepr.js"></script>
+<script src="js/modules/u3-imf.js"></script>
+<script src="js/modules/u3-phases.js"></script>
+<script src="js/modules/u3-gases.js"></script>
+<script src="js/modules/u3-maxwell.js"></script>
+<script src="js/modules/u3-solutions.js"></script>
+<script src="js/modules/u3-spectroscopy.js"></script>
+<script src="js/modules/u4-reactions.js"></script>
+<script src="js/modules/u4-netionic.js"></script>
+<script src="js/modules/u4-stoich.js"></script>
+<script src="js/modules/u4-redox.js"></script>
+<script src="js/modules/u5-collision.js"></script>
+<script src="js/modules/u5-ratelaws.js"></script>
+<script src="js/modules/u5-energy.js"></script>
+<script src="js/modules/u6-heating.js"></script>
+<script src="js/modules/u6-calorimetry.js"></script>
+<script src="js/modules/u6-enthalpy.js"></script>
+<script src="js/modules/u7-equilibrium.js"></script>
+<script src="js/modules/u7-lechatelier.js"></script>
+<script src="js/modules/u7-ice.js"></script>
+<script src="js/modules/u7-ksp.js"></script>
+<script src="js/modules/u8-ph.js"></script>
+<script src="js/modules/u8-titration.js"></script>
+<script src="js/modules/u8-buffers.js"></script>
+<script src="js/modules/u9-gibbs.js"></script>
+<script src="js/modules/u9-electrochem.js"></script>
+<script src="js/modules/tools-reference.js"></script>
+<script src="js/modules/tools-quiz.js"></script>
+<script src="js/app.js"></script>
+<!-- /build:js -->
+</body>
+</html>
