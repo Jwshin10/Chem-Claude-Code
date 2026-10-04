@@ -133,7 +133,7 @@ const Mol3D = {
       c.globalAlpha = 1;
       const m = list[i], V = MOLECULES.vsepr(m.L.length, m.lp);
       U.text(c, U.chemText(m.f), 16, cv.h - 36, { size: 20, weight: 700 });
-      U.text(c, V.shape + ' · ' + V.hyb, 16, cv.h - 14, { size: 13, color: t.ink2 });
+      U.text(c, V.shape + ', ' + V.hyb, 16, cv.h - 14, { size: 13, color: t.ink2 });
       U.text(c, 'drag to rotate', cv.w - 14, cv.h - 14, { size: 11, color: t.ink3, align: 'right' });
     });
   },
@@ -164,8 +164,8 @@ App.register({
       if (!MOLECULES.byId[id] || MOLECULES.byId[id].atom) id = 'nh3';
       let rot = { yaw: 0.5, pitch: 0.3 }, auto = true, lp = true, angle = true, dip = true, dragging = false, last = null;
       const groups = {};
-      MOLECULES.single.forEach(m => { const V = MOLECULES.vsepr(m.L.length, m.lp); const k = `${V.steric} domains`; (groups[k] = groups[k] || []).push({ value: m.id, label: `${U.chemText(m.f)} — ${V.shape}` }); });
-      MOLECULES.multi.forEach(m => { if (BUILDER.embed(m).ring) return; (groups['Several central atoms'] = groups['Several central atoms'] || []).push({ value: m.id, label: `${U.chemText(m.f)} — ${m.name}` }); });
+      MOLECULES.single.forEach(m => { const V = MOLECULES.vsepr(m.L.length, m.lp); const k = `${V.steric} domains`; (groups[k] = groups[k] || []).push({ value: m.id, label: `${U.chemText(m.f)}, ${V.shape}` }); });
+      MOLECULES.multi.forEach(m => { if (BUILDER.embed(m).ring) return; (groups['Several central atoms'] = groups['Several central atoms'] || []).push({ value: m.id, label: `${U.chemText(m.f)}, ${m.name}` }); });
       const sel = U.select({ label: 'Molecule', options: Object.keys(groups).map(g => ({ group: g, options: groups[g] })), value: id, onChange: v => { id = v; U.store.set('vseprId', id); update(); } });
       const toggles = h('div', { class: 'row' },
         U.check({ label: 'Spin', checked: true, onChange: v => auto = v }).el,
@@ -184,7 +184,7 @@ App.register({
         const old = sel.input.querySelector('optgroup[data-custom]');
         if (old) old.remove();
         const cm = MOLECULES.byId.custom;
-        if (cm) { const g = h('optgroup', { label: 'Your molecule', 'data-custom': '1' }, h('option', { value: 'custom' }, U.chemText(cm.f) + ' — ' + cm.name)); sel.input.insertBefore(g, sel.input.firstChild); }
+        if (cm) { const g = h('optgroup', { label: 'Your molecule', 'data-custom': '1' }, h('option', { value: 'custom' }, U.chemText(cm.f) + ', ' + cm.name)); sel.input.insertBefore(g, sel.input.firstChild); }
         sel.set(id);
       }
       syncCustom();
@@ -248,8 +248,7 @@ App.register({
         const m = MOLECULES.byId[id], V = MOLECULES.vsepr(m.L.length, m.lp);
         const card = h('button', { type: 'button', class: 'panel', style: { cursor: 'pointer', textAlign: 'left', padding: '10px', gap: '6px' } });
         const cv = U.canvas(card, { aspect: 1.2, scope: s, draw: (c, w, H) => Mol3D.draw(c, w, H, Mol3D.fromMolecule(m), { yaw: 0.55, pitch: 0.32 }, { scale: Math.min(w, H) * 0.3, labels: false }) });
-        cv.canvas.style.background = 'transparent';
-        card.append(h('b', null, V.shape), h('span', { class: 'small muted' }, `${ax} · ${V.angle} · ${V.hyb}`), h('span', { class: 'small', html: 'e.g. ' + U.chem(m.f) }));
+        card.append(h('b', null, V.shape), h('span', { class: 'small muted' }, `${ax}, ${V.angle}, ${V.hyb}`), h('span', { class: 'small', html: 'e.g. ' + U.chem(m.f) }));
         card.addEventListener('click', () => { U.store.set('vseprId', id); U.store.set('tab:vsepr', 0); window.dispatchEvent(new HashChangeEvent('hashchange')); });
         grid.appendChild(card);
       });

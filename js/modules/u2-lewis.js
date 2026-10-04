@@ -76,8 +76,8 @@ App.register({
     let id = U.store.get('lewisId', 'no3'), res = 0, step = 5, formal = true;
     if (!MOLECULES.byId[id]) id = 'no3';
     const opts = [
-      { group: 'One central atom', options: MOLECULES.single.map(m => ({ value: m.id, label: `${U.chemText(m.f)} — ${m.name}` })) },
-      { group: 'Several central atoms', options: MOLECULES.multi.map(m => ({ value: m.id, label: `${U.chemText(m.f)} — ${m.name}` })) },
+      { group: 'One central atom', options: MOLECULES.single.map(m => ({ value: m.id, label: `${U.chemText(m.f)}, ${m.name}` })) },
+      { group: 'Several central atoms', options: MOLECULES.multi.map(m => ({ value: m.id, label: `${U.chemText(m.f)}, ${m.name}` })) },
     ];
     const sel = U.select({ label: 'Molecule or ion', options: opts, value: id, onChange: v => { id = v; res = 0; step = 5; U.store.set('lewisId', id); update(); } });
     const fc = U.check({ label: 'Show formal charges', checked: true, onChange: v => { formal = v; cv.redraw(); } });
@@ -92,7 +92,7 @@ App.register({
       const old = sel.input.querySelector('optgroup[data-custom]');
       if (old) old.remove();
       const m = MOLECULES.byId.custom;
-      if (m) { const g = h('optgroup', { label: 'Your molecule', 'data-custom': '1' }, h('option', { value: 'custom' }, U.chemText(m.f) + ' — ' + m.name)); sel.input.insertBefore(g, sel.input.firstChild); }
+      if (m) { const g = h('optgroup', { label: 'Your molecule', 'data-custom': '1' }, h('option', { value: 'custom' }, U.chemText(m.f) + ', ' + m.name)); sel.input.insertBefore(g, sel.input.firstChild); }
       sel.set(id);
     }
     syncCustom();
@@ -168,7 +168,7 @@ App.register({
           h('dt', null, 'Electron domains'), h('dd', null, V.steric),
           h('dt', null, 'Molecular geometry'), h('dd', null, V.shape),
           h('dt', null, 'Hybridization'), h('dd', null, V.hyb)),
-          h('a', { class: 'btn sm', href: '#vsepr', onclick: () => U.store.set('vseprId', m.id) }, 'View in 3D →')));
+          h('a', { class: 'btn sm', href: '#vsepr', onclick: () => U.store.set('vseprId', m.id) }, 'Open in the 3D viewer')));
       } else if (m.atom) {
         infoBox.appendChild(U.callout(`This is a <b>Lewis dot symbol</b>: ${MOLECULES.totalValence(m)} valence electron${MOLECULES.totalValence(m) === 1 ? '' : 's'} drawn around the symbol. Single dots fill the four sides first, then pair up.`));
       } else {

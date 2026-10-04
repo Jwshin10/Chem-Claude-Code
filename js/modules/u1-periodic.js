@@ -91,8 +91,8 @@ App.register({
         const tile = h('div', { style: { width: '92px', height: '100px', borderRadius: '12px', background: ELEMENTS.CAT_COLORS[e.cat], color: '#172330', padding: '8px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: 'none' } },
           h('span', { class: 'mono', style: { fontSize: '13px' } }, e.Z), h('b', { style: { font: '700 36px/1 var(--font-display)', textAlign: 'center' } }, e.sym), h('span', { class: 'mono', style: { fontSize: '11px', textAlign: 'center' } }, e.mass));
         const nav = h('div', { class: 'row' },
-          U.btn('← Prev', () => { if (selZ > 1) { selZ--; paint(); detail(); } }, 'sm'),
-          U.btn('Next →', () => { if (selZ < 118) { selZ++; paint(); detail(); } }, 'sm'));
+          U.btn('Previous', () => { if (selZ > 1) { selZ--; paint(); detail(); } }, 'sm'),
+          U.btn('Next', () => { if (selZ < 118) { selZ++; paint(); detail(); } }, 'sm'));
         const kv = h('dl', { class: 'kv' });
         const add = (k, v) => { kv.append(h('dt', null, k), h('dd', { html: v == null ? '—' : String(v) })); };
         add('Category', e.catName);

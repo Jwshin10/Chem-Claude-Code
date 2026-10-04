@@ -14,7 +14,7 @@ App.register({
     const h = U.h;
     const common = ['H', 'Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Na', 'Mg', 'Al', 'Si', 'P', 'S', 'Cl', 'K', 'Ca', 'Fe', 'Cu', 'Zn', 'Br', 'Ag', 'I', 'Cs', 'Au'];
     let A = 'H', B = 'Cl';
-    const opts = common.map(s => ({ value: s, label: `${s} — ${ELEMENTS.bySym[s].name} (EN ${ELEMENTS.bySym[s].en})` }));
+    const opts = common.map(s => ({ value: s, label: `${s}, ${ELEMENTS.bySym[s].name} (EN ${ELEMENTS.bySym[s].en})` }));
     const sA = U.select({ label: 'Atom 1', options: opts, value: A, onChange: v => { A = v; update(); } });
     const sB = U.select({ label: 'Atom 2', options: opts, value: B, onChange: v => { B = v; update(); } });
     const picks = h('div', { class: 'row' }, [['H', 'H'], ['C', 'H'], ['H', 'Cl'], ['H', 'F'], ['O', 'H'], ['C', 'O'], ['Na', 'Cl'], ['Mg', 'O'], ['Cs', 'F'], ['Cu', 'Zn']].map(([a, b]) => U.btn(a + '–' + b, () => { A = a; B = b; sA.set(a); sB.set(b); update(); }, 'sm')));

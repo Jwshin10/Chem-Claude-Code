@@ -98,7 +98,7 @@ App.register({
       if (picked === null) opts = shuffle(q[2].map((t, i) => ({ t, right: i === 0 })));
       const prog = h('div', { class: 'progress' }, h('i', { style: { width: (idx / order.length * 100) + '%' } }));
       const m = App.byId[q[4]];
-      const box = h('div', { class: 'q-card' }, h('div', { class: 'flex-between' }, h('span', { class: 'eyebrow', style: { color: `var(--u${q[0]})` } }, `Unit ${q[0]} · Question ${idx + 1} of ${order.length}`), h('span', { class: 'small mono' }, `Score ${score}/${answered}`)), prog,
+      const box = h('div', { class: 'q-card' }, h('div', { class: 'flex-between' }, h('span', { class: 'eyebrow', style: { color: `var(--u${q[0]})` } }, `Question ${idx + 1} of ${order.length}, Unit ${q[0]}`), h('span', { class: 'small muted' }, `Score ${score}/${answered}`)), prog,
         h('h3', { style: { fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '1.08rem' } }, q[1]),
         h('div', { class: 'q-opts' }, opts.map((o, i) => {
           const b = h('button', { type: 'button', class: 'q-opt' + (picked !== null ? (o.right ? ' right' : picked === i ? ' wrong' : '') : ''), disabled: picked !== null }, h('span', { class: 'letter' }, 'ABCD'[i]), h('span', null, o.t));
@@ -107,7 +107,7 @@ App.register({
         })));
       if (picked !== null) {
         box.append(U.callout((opts[picked].right ? '<b>Correct.</b> ' : '<b>Not quite.</b> ') + q[3], opts[picked].right ? 'good' : 'bad'),
-          h('div', { class: 'row' }, U.btn(idx + 1 < order.length ? 'Next question →' : 'See results', () => { idx++; picked = null; show(); }, 'primary'), m ? h('a', { class: 'btn', href: '#' + m.id }, 'Open “' + m.title + '”') : null));
+          h('div', { class: 'row' }, U.btn(idx + 1 < order.length ? 'Next question' : 'See results', () => { idx++; picked = null; show(); }, 'primary'), m ? h('a', { class: 'btn', href: '#' + m.id }, 'Open “' + m.title + '”') : null));
       }
       card.appendChild(box);
     }
