@@ -1,4 +1,4 @@
-/* AP Chem Visualizer — layout concept: a lab instrument panel. A periodic-table-style
+/* Valence (AP Chemistry) — layout concept: a lab instrument panel. A periodic-table-style
    tile marks every topic (unit.topic number + a two-letter "symbol"), the sidebar is the
    table of contents, and each topic page is a bench of interactive panels. */
 :root {

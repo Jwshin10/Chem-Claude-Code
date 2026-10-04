@@ -137,7 +137,7 @@
     if (i > 0) pg.appendChild(h('a', { href: '#' + seq[i - 1].id, class: 'prev' }, h('span', { class: 'lbl' }, '← ' + App.number(seq[i - 1])), seq[i - 1].title));
     if (i < seq.length - 1) pg.appendChild(h('a', { href: '#' + seq[i + 1].id, class: 'next' }, h('span', { class: 'lbl' }, App.number(seq[i + 1]) + ' →'), seq[i + 1].title));
     page.appendChild(pg);
-    document.title = m.title + ' · AP Chem Visualizer';
+    document.title = m.title + ' · Valence';
   }
 
   function renderHome() {
@@ -186,7 +186,7 @@
     }
     page.appendChild(grid);
     main.appendChild(page);
-    document.title = 'AP Chem Visualizer';
+    document.title = 'Valence AP Chemistry';
   }
 
   function route() {
