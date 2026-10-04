@@ -28,7 +28,21 @@ App.register({
       const out = h('div', { class: 'stack' });
       const cv = U.canvas(null, { aspect: 1.25, scope: s });
       const gr = U.canvas(null, { aspect: 1.8, scope: s, draw: graph });
-      b.append(h('div', { class: 'grid-viz' }, h('div', { class: 'stack' }, out, U.panel('Solubility vs. added common ion', gr.wrap)), h('div', { class: 'stack' }, U.panel('Choose', sel.el, ws.el, cs.el, ps.el), U.panel('Saturated solution', cv.wrap))));
+      const ionStr = (x, q) => x + '^' + (Math.abs(q) > 1 ? Math.abs(q) : '') + (q > 0 ? '+' : '-');
+      const own = BUILDER.entry({ title: 'Add your own salt', label: 'Formula and Ksp', placeholder: 'e.g. PbSO4 1.6e-8', examples: ['PbSO4 1.6e-8', 'Ag2CO3 8.5e-12', 'Zn(OH)2 3e-17', 'BaF2 1.0e-6'], button: 'Add', hint: 'Type the formula, a space, then K<sub>sp</sub> (1.6e-8 or 1.6x10^-8).', onSubmit: text => {
+        const parts = text.trim().split(/[\s,]+/);
+        const f = parts[0] || '', kt = parts.slice(1).join('').replace(/[×x*]10\^?/i, 'e').replace(/−/g, '-');
+        const io = CHEM.ionic(f);
+        if (!io) return { ok: false, msg: `Could not split “${U.esc(f)}” into a metal (or NH₄⁺) cation and a known anion.` };
+        const Ksp = parseFloat(kt);
+        if (!(Ksp > 0 && Ksp < 1)) return { ok: false, msg: 'Add a Ksp value after the formula, e.g. PbSO4 1.6e-8.' };
+        SALTS.push([f, ionStr(io.cat, io.qc), io.nc, ionStr(io.an, io.qa), io.na, Ksp]);
+        si = SALTS.length - 1;
+        sel.input.appendChild(h('option', { value: si }, `${U.chemText(f)}  (Ksp = ${U.sig(Ksp, 2)}) — yours`));
+        sel.set(si); common = 0; cs.set(0); upd();
+        return { ok: true, msg: `Added ${U.chem(f)}: K<sub>sp</sub> = [${U.chem(ionStr(io.cat, io.qc))}]${io.nc > 1 ? '<sup>' + io.nc + '</sup>' : ''}[${U.chem(ionStr(io.an, io.qa))}]${io.na > 1 ? '<sup>' + io.na + '</sup>' : ''}.` };
+      } });
+      b.append(h('div', { class: 'grid-viz' }, h('div', { class: 'stack' }, out, U.panel('Solubility vs. added common ion', gr.wrap)), h('div', { class: 'stack' }, U.panel('Choose', sel.el, ws.el, cs.el, ps.el), own.el, U.panel('Saturated solution', cv.wrap))));
       const solveS = (x, y, Ksp, cm, ca) => {
         const f = sv => Math.log(Math.pow(cm + x * sv, x) * Math.pow(ca + y * sv, y) + 1e-300) - Math.log(Ksp);
         return U.bisect(f, 0, 10, 200);

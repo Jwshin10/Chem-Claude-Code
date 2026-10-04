@@ -26,7 +26,22 @@ App.register({
     const pOut = h('div', { class: 'stack' });
     const gOut = h('div', { class: 'stack' });
     const cv = U.canvas(null, { aspect: 2.1, scope });
-    el.append(h('div', { class: 'grid-viz' }, U.panel('Particle view', cv.wrap, h('div', { class: 'row' }, go)), h('div', { class: 'stack' }, U.panel('Set up', sel.el, sA.el, sB.el), pOut)), gOut);
+    const own = BUILDER.entry({ title: 'Use your own reaction', label: 'Equation with two reactants (coefficients optional)', placeholder: 'e.g. C2H6 + O2 -> CO2 + H2O', examples: ['C2H6 + O2 -> CO2 + H2O', 'NO + O2 -> NO2', 'C3H8 + O2 -> CO2 + H2O', 'CH4 + Cl2 -> CH3Cl + HCl'], button: 'Use', onSubmit: text => {
+      let R, P, co;
+      try { ({ R, P } = CHEM.parseEquation(text)); co = CHEM.balance(R, P); } catch (e) { return { ok: false, msg: e.message }; }
+      if (R.length !== 2) return { ok: false, msg: 'The particle view needs exactly two reactants (A and B).' };
+      if (R.concat(P).some(x => x.charge || x.electron)) return { ok: false, msg: 'Use neutral substances (no ions) for this tool.' };
+      const side = (S, off) => S.map((x, i) => (co[off + i] > 1 ? co[off + i] : '') + x.formula).join(' + ');
+      const entry = { eq: side(R, 0) + ' -> ' + side(P, R.length), R: R.map((x, i) => [x.formula, co[i]]), P: P.map((x, i) => [x.formula, co[R.length + i]]), custom: true };
+      let k = RX.findIndex(r => r.custom);
+      if (k < 0) { RX.push(entry); k = RX.length - 1; sel.input.appendChild(h('option', { value: k })); } else RX[k] = entry;
+      sel.input.options[k].textContent = 'Yours: ' + U.chemText(entry.eq);
+      ri = k; sel.set(k);
+      nA = Math.min(12, entry.R[0][1] * 3); nB = Math.min(12, entry.R[1][1] * 2); sA.set(nA); sB.set(nB);
+      reacted = 0; actual = 0; refresh();
+      return { ok: true, msg: 'Balanced: ' + CHEM.eqHTML(R, P, co) + '. Adjust the molecule sliders and press React.' };
+    } });
+    el.append(h('div', { class: 'grid-viz' }, U.panel('Particle view', cv.wrap, h('div', { class: 'row' }, go)), h('div', { class: 'stack' }, U.panel('Set up', sel.el, sA.el, sB.el), own.el, pOut)), gOut);
     const sp = f => CHEM.parseSpecies(f);
     function calc() {
       const r = RX[ri], [a, b] = r.R;

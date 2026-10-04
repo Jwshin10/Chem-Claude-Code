@@ -42,7 +42,7 @@ const root = process.env.ROOT || join(dirname(fileURLToPath(import.meta.url)), '
         await sleep(300);
         const txt = root.innerText;
         const bad = [];
-        for (const w of ['NaN', 'undefined', '[object']) if (txt.includes(w)) { const i = txt.indexOf(w); bad.push(w + ': …' + txt.slice(Math.max(0, i - 60), i + 30).replace(/\n/g, ' ') + '…'); }
+        for (const w of ['NaN', 'undefined', '[object']) { const i = txt.search(new RegExp(w === '[object' ? '\\[object' : '\\b' + w + '\\b')); if (i < 0) continue; bad.push(w + ': …' + txt.slice(Math.max(0, i - 60), i + 30).replace(/\n/g, ' ') + '…'); }
         const over = document.documentElement.scrollWidth > document.documentElement.clientWidth + 1;
         return { n, bad, over, sw: document.documentElement.scrollWidth };
       });

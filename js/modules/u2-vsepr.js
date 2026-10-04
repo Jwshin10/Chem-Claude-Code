@@ -10,7 +10,21 @@ const Mol3D = {
       atoms.push({ el: l.el, p: l.v.map(x => x * len), r: l.el === 'H' ? 0.2 : 0.29 });
       bonds.push({ a: 0, b: i + 1, order: l.order });
     });
-    return { atoms, bonds, lps: d.lps.map(v => ({ from: 0, v })), m };
+    // hydrogens on outer atoms (e.g. the O–H groups of H2SO4), tilted ~109° from the bond
+    const nrm = v => { const l = Math.hypot(...v) || 1; return v.map(x => x / l); };
+    const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    d.ligands.forEach((l, i) => {
+      const nH = (m.L[i] && m.L[i][2]) || 0;
+      if (!nH) return;
+      const u = nrm(l.v), p = nrm(cross(u, Math.abs(u[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0])), q = cross(u, p), base = atoms[i + 1].p;
+      for (let k = 0; k < nH; k++) {
+        const ph = k * 2 * Math.PI / 3, dir = [0, 1, 2].map(j => 0.334 * u[j] + 0.943 * (Math.cos(ph) * p[j] + Math.sin(ph) * q[j]));
+        atoms.push({ el: 'H', p: base.map((x, j) => x + dir[j] * 0.82), r: 0.2 });
+        bonds.push({ a: i + 1, b: atoms.length - 1, order: 1 });
+      }
+    });
+    const radius = Math.max(...atoms.map(a => Math.hypot(...a.p) + a.r));
+    return { atoms, bonds, lps: d.lps.map(v => ({ from: 0, v })), m, radius };
   },
   rotate(p, rot) {
     const [x, y, z] = p, cy = Math.cos(rot.yaw), sy = Math.sin(rot.yaw), cx = Math.cos(rot.pitch), sx = Math.sin(rot.pitch);
@@ -20,7 +34,7 @@ const Mol3D = {
   },
   draw(c, w, H, model, rot, o = {}) {
     const t = U.theme();
-    const S = (o.scale || Math.min(w, H) * 0.3), cx = w / 2, cy = H / 2 + (o.dy || 0), f = 6;
+    const S = (o.scale || Math.min(w, H) * 0.3) / Math.max(1, (model.radius || 1.4) / 1.4), cx = w / 2, cy = H / 2 + (o.dy || 0), f = 6;
     const proj = p => { const q = Mol3D.rotate(p, rot); const s = f / (f - q[2]); return { x: cx + q[0] * S * s, y: cy - q[1] * S * s, z: q[2], s }; };
     const items = [];
     const P = model.atoms.map(a => proj(a.p));
@@ -82,7 +96,7 @@ const Mol3D = {
     }
   },
   smallestPair(model) {
-    const vs = model.bonds.map(b => { const p = model.atoms[b.b].p; const n = Math.hypot(...p); return p.map(x => x / n); });
+    const vs = model.bonds.filter(b => b.a === 0).map(b => { const p = model.atoms[b.b].p; const n = Math.hypot(...p); return p.map(x => x / n); });
     let best = null;
     for (let i = 0; i < vs.length; i++) for (let j = i + 1; j < vs.length; j++) {
       const ang = Math.acos(U.clamp(vs[i][0] * vs[j][0] + vs[i][1] * vs[j][1] + vs[i][2] * vs[j][2], -1, 1));
@@ -127,7 +141,7 @@ const Mol3D = {
 
 App.register({
   id: 'vsepr', unit: 2, sym: 'Vs', title: 'VSEPR & 3D Molecular Shapes',
-  desc: 'Rotate molecules in 3D to see electron domains, lone pairs, bond angles, hybridization and polarity.',
+  desc: 'Rotate molecules in 3D to see electron domains, lone pairs, bond angles, hybridization and polarity. Type any formula to build your own.',
   tags: ['vsepr', 'molecular geometry', 'electron domain', 'hybridization', 'sp3', 'sp2', 'bond angle', 'polarity', 'dipole', 'sigma', 'pi', 'tetrahedral', 'trigonal', 'octahedral', '3d'],
   keyIdeas: [
     'Electron domains (bonds of any order and lone pairs) spread out as far apart as possible to minimize repulsion.',
@@ -145,11 +159,13 @@ App.register({
     ], scope, { key: 'vsepr' });
 
     function viewer(b, s) {
+      BUILDER.restore();
       let id = U.store.get('vseprId', 'nh3');
-      if (!MOLECULES.byId[id] || !MOLECULES.byId[id].c) id = 'nh3';
+      if (!MOLECULES.byId[id] || MOLECULES.byId[id].atom) id = 'nh3';
       let rot = { yaw: 0.5, pitch: 0.3 }, auto = true, lp = true, angle = true, dip = true, dragging = false, last = null;
       const groups = {};
       MOLECULES.single.forEach(m => { const V = MOLECULES.vsepr(m.L.length, m.lp); const k = `${V.steric} domains`; (groups[k] = groups[k] || []).push({ value: m.id, label: `${U.chemText(m.f)} — ${V.shape}` }); });
+      MOLECULES.multi.forEach(m => { if (BUILDER.embed(m).ring) return; (groups['Several central atoms'] = groups['Several central atoms'] || []).push({ value: m.id, label: `${U.chemText(m.f)} — ${m.name}` }); });
       const sel = U.select({ label: 'Molecule', options: Object.keys(groups).map(g => ({ group: g, options: groups[g] })), value: id, onChange: v => { id = v; U.store.set('vseprId', id); update(); } });
       const toggles = h('div', { class: 'row' },
         U.check({ label: 'Spin', checked: true, onChange: v => auto = v }).el,
@@ -163,22 +179,44 @@ App.register({
       b.append(h('div', { class: 'grid-viz' },
         U.panel(null, h('div', { class: 'flex-between' }, h('h3', { id: 'vsTitle' }), toggles), cv.wrap,
           U.legend([[U.theme().purple, 'lone pair (electron domain)'], [U.theme().orange, 'bond angle'], [U.theme().red, 'net dipole (→ δ−)']])),
-        h('div', { class: 'stack' }, U.panel('Choose', sel.el), info, U.panel('Lewis structure', lewis.wrap))));
+        h('div', { class: 'stack' }, U.panel('Choose', sel.el), BUILDER.moleculePanel(spec => { id = spec.id; U.store.set('vseprId', id); syncCustom(); update(); }).el, info, U.panel('Lewis structure', lewis.wrap))));
+      function syncCustom() {
+        const old = sel.input.querySelector('optgroup[data-custom]');
+        if (old) old.remove();
+        const cm = MOLECULES.byId.custom;
+        if (cm) { const g = h('optgroup', { label: 'Your molecule', 'data-custom': '1' }, h('option', { value: 'custom' }, U.chemText(cm.f) + ' — ' + cm.name)); sel.input.insertBefore(g, sel.input.firstChild); }
+        sel.set(id);
+      }
+      syncCustom();
       let model, dipVec, m;
       s.loop(dt => {
         if (auto && !dragging) rot.yaw += dt * 0.6;
         const c = cv.ctx;
         c.clearRect(0, 0, cv.w, cv.h);
-        Mol3D.draw(c, cv.w, cv.h, model, rot, { lonePairs: lp, angle, angleText: m.ang && m.lp ? m.ang : null, dipole: dip, dipoleVec: dipVec, scale: Math.min(cv.w, cv.h) * 0.3 });
+        if (!model) { U.text(c, m && m.atom ? 'A single atom has no shape' : 'No 3D model for rings', cv.w / 2, cv.h / 2, { align: 'center', color: U.theme().ink3, size: 14 }); return; }
+        Mol3D.draw(c, cv.w, cv.h, model, rot, { lonePairs: lp, angle: angle && !model.multi, angleText: m.ang && m.lp ? m.ang : null, dipole: dip, dipoleVec: dipVec, scale: Math.min(cv.w, cv.h) * 0.3 });
       });
       function update() {
         m = MOLECULES.byId[id];
-        model = Mol3D.fromMolecule(m);
-        dipVec = Mol3D.dipole(m);
         lewis.redraw();
-        const V = MOLECULES.vsepr(m.L.length, m.lp), pol = MOLECULES.polarity(m), bc = MOLECULES.bondCounts(m);
         document.getElementById('vsTitle').innerHTML = U.chem(m.f) + ' <span class="muted small" style="font-weight:500">' + m.name + '</span>';
         U.clear(info);
+        model = null; dipVec = null;
+        if (m.atom) { info.appendChild(U.callout('A single atom or monatomic ion has no bonds, so it has no molecular shape. Try a molecule such as PF5 or CH3OH.', 'warn')); return; }
+        if (!m.c) {
+          const g = BUILDER.embed(m), st = MOLECULES.build(m), bc = MOLECULES.bondCounts(m);
+          if (g.ring) info.appendChild(U.callout('3D view isn’t available for ring molecules, but the geometry at each atom still applies.', 'warn'));
+          else { model = g; dipVec = g.dipole; }
+          const hc = st.atoms.every(a => a.el === 'C' || a.el === 'H');
+          const centers = st.atoms.map((a, i) => ({ a, i })).filter(x => x.a.bondCount > 1);
+          info.appendChild(U.panel('Geometry at each central atom', U.table(['Atom', 'Domains', 'Shape', 'Hybrid.'], centers.map(x => { const V = MOLECULES.vsepr(x.a.bondCount, x.a.lp); return [x.a.el + (x.i + 1), V.steric, V.shape, V.hyb]; })),
+            h('dl', { class: 'kv' }, h('dt', null, 'σ / π bonds'), h('dd', null, `${bc.sigma} σ, ${bc.pi} π`), h('dt', null, 'Polarity'), h('dd', null, m.q ? 'ion (charged)' : g.ring ? (hc ? 'nonpolar' : 'polar') : g.polar ? 'polar' : 'nonpolar'))));
+          info.appendChild(U.callout(hc ? 'Hydrocarbons are nonpolar: C–H bonds are only slightly polar and their dipoles nearly cancel.' : 'Each central atom has its own VSEPR geometry. The 3D model joins them, assuming free rotation around single bonds. Numbers in the table match atom order.'));
+          return;
+        }
+        model = Mol3D.fromMolecule(m);
+        dipVec = Mol3D.dipole(m);
+        const V = MOLECULES.vsepr(m.L.length, m.lp), pol = MOLECULES.polarity(m), bc = MOLECULES.bondCounts(m);
         const kv = h('dl', { class: 'kv' });
         const add = (k, v) => kv.append(h('dt', null, k), h('dd', { html: String(v) }));
         add('Notation', `AX<sub>${m.L.length}</sub>${m.lp ? 'E<sub>' + m.lp + '</sub>' : ''}`);

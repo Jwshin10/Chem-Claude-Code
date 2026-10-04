@@ -22,12 +22,34 @@ const SUBSTANCES = (() => {
   });
   const byId = Object.fromEntries(list.map(s => [s.id, s]));
   const imfs = s => ['LDF'].concat(s.polar ? ['Dipole–dipole'] : []).concat(s.hb ? ['Hydrogen bonding'] : []);
-  return { list, byId, imfs };
+  const ckey = c => Object.keys(c).sort().map(k => k + c[k]).join('');
+  /** turn typed text into a substance (measured data if we have it, otherwise estimated) */
+  function fromText(text) {
+    const r = BUILDER.fromText(text);
+    if (r.error) return { error: r.error };
+    const spec = r.spec;
+    if (spec.q) return { error: 'Enter a neutral molecule. Ions in solution are held by ion–dipole forces, which this comparison does not model.' };
+    if (spec.atom && !['He', 'Ne', 'Ar', 'Kr', 'Xe', 'Rn'].includes(spec.struct.atoms[0].el)) return { error: 'A lone atom of that element is not a stable substance. Try a molecule such as Cl2 or CH3OH.' };
+    const P = BUILDER.properties(spec);
+    const counts = {};
+    MOLECULES.build(spec).atoms.forEach(a => { counts[a.el] = (counts[a.el] || 0) + 1; });
+    const body = text.replace(/\s+/g, '').replace(/[=#≡]/g, '');
+    const id = 'my:' + body;
+    if (byId[id]) return { sub: byId[id], known: false, P };
+    const known = list.find(x => !x.est && x.f === body) || list.find(x => !x.est && ckey(U.parseFormula(x.f)) === ckey(counts) && x.polar === P.polar && x.hb === P.hb);
+    if (known) return { sub: known, known: true, P };
+    const sub = { f: spec.f.replace(/\^.*/, ''), name: spec.custom ? body : spec.name, bp: P.bp, mp: Math.min(P.mp, P.bp - 10), polar: P.polar, hb: P.hb, M: P.M, e: P.e, id, est: true };
+    if (!byId[id]) list.push(sub);
+    byId[id] = sub;
+    return { sub, known: false, P };
+  }
+  const describe = (r) => `${r.known ? `Using measured data for <b>${r.sub.name}</b>.` : `Added <b>${U.chem(r.sub.f)}</b>: ${r.sub.e} electrons, ${r.sub.polar ? 'polar' : 'nonpolar'}${r.sub.hb ? ', hydrogen bonding' : ''}. Boiling point estimated at about ${r.sub.bp} °C (±40 °C) from its electron count, polarity and hydrogen bonding.`}`;
+  return { list, byId, imfs, fromText, describe };
 })();
 
 App.register({
   id: 'imf', unit: 3, sym: 'If', title: 'Intermolecular Forces',
-  desc: 'See London dispersion, dipole–dipole, hydrogen bonding and ion–dipole forces in action, and explain boiling points.',
+  desc: 'See London dispersion, dipole–dipole, hydrogen bonding and ion–dipole forces in action, explain boiling points, and test your own molecules.',
   tags: ['imf', 'london dispersion', 'ldf', 'dipole-dipole', 'hydrogen bonding', 'h-bond', 'ion-dipole', 'boiling point', 'polarizability', 'vapor pressure', 'intermolecular'],
   keyIdeas: [
     '<b>London dispersion forces (LDF)</b> exist between all molecules. They grow with the number of electrons (polarizability) and with surface contact (straight chains &gt; branched).',
@@ -158,8 +180,15 @@ App.register({
       const quick = h('div', { class: 'row' }, U.btn('Set to 25 °C', () => { Tc = 25; tS.set(25); info(); }, 'sm'), U.btn('Just below bp', () => { Tc = sub.bp - 15; tS.set(Tc); info(); }, 'sm'), U.btn('Just above bp', () => { Tc = sub.bp + 25; tS.set(Tc); info(); }, 'sm'));
       const box = h('div', { class: 'stack' });
       const cv = U.canvas(null, { aspect: 1.55, scope: s });
+      const own = BUILDER.entry({ title: 'Simulate your own molecule', label: 'Formula', placeholder: 'e.g. CH3CH2CH2OH', examples: ['CH3CH2CH2OH', 'CH3OCH3', 'CCl4', 'C8H18', 'HCN', 'CH3CN'], button: 'Simulate', hint: 'Type a molecular or condensed formula. Measured data are used when we have them; otherwise the boiling point is estimated.', onSubmit: text => {
+        const r = SUBSTANCES.fromText(text);
+        if (r.error) return { ok: false, msg: r.error };
+        if (!sel.input.querySelector(`option[value="${CSS.escape(r.sub.id)}"]`)) sel.input.appendChild(h('option', { value: r.sub.id }, `${U.chemText(r.sub.f)} — yours (bp ≈ ${r.sub.bp} °C)`));
+        sub = r.sub; sel.set(sub.id); U.store.set('imfSim', sub.id); reset(); info();
+        return { ok: true, msg: SUBSTANCES.describe(r) };
+      } });
       b.append(h('div', { class: 'grid-viz' }, U.panel(null, cv.wrap, U.legend([[U.theme().blue, 'hydrogen bond'], [U.theme().good, 'dipole–dipole'], [U.theme().ink3, 'London dispersion']])),
-        h('div', { class: 'stack' }, U.panel('Settings', sel.el, tS.el, quick), box)));
+        h('div', { class: 'stack' }, U.panel('Settings', sel.el, tS.el, quick), own.el, box)));
       // 2-D Lennard-Jones particles in reduced units (sigma = 1)
       const N = 42, BW = 22, BH = 14;
       let P = [];
@@ -225,7 +254,7 @@ App.register({
         U.clear(box);
         const state = Tc < sub.mp ? 'solid' : Tc < sub.bp ? 'liquid' : 'gas';
         const stats = U.stats([['bp', 'Boiling point'], ['mp', 'Melting point'], ['st', 'State at this T'], ['e', 'Electrons']]);
-        stats.set('bp', sub.bp + ' °C'); stats.set('mp', sub.mp + ' °C'); stats.set('st', state); stats.set('e', sub.e);
+        stats.set('bp', (sub.est ? '≈' : '') + sub.bp + ' °C'); stats.set('mp', (sub.est ? '≈' : '') + sub.mp + ' °C'); stats.set('st', state); stats.set('e', sub.e);
         box.append(stats.el,
           U.panel('Forces present', h('div', { class: 'row' }, ['LDF', 'Dipole–dipole', 'Hydrogen bonding'].map(n => h('span', { class: 'chip' + (SUBSTANCES.imfs(sub).includes(n) ? '' : ' off') }, n)))),
           U.callout(state === 'gas' ? `Above ${sub.bp} °C the molecules have enough kinetic energy to overcome their intermolecular attractions, so they spread out as a gas.` : `Below its boiling point the attractions win: molecules stay close together and the dashed lines show the IMFs holding them.`));
@@ -246,10 +275,17 @@ App.register({
       const cards = h('div', { class: 'grid2' });
       const verdict = h('div');
       const cv = U.canvas(null, { height: 150, scope: s, draw });
-      b.append(U.panel('Pick two substances', h('div', { class: 'controls' }, sA.el, sB.el), h('div', { class: 'small muted' }, 'Classic AP comparisons:'), pick), cards, U.panel('Boiling points', cv.wrap), verdict);
+      const own = BUILDER.entry({ title: 'Compare your own molecule', label: 'Formula (goes into Substance B)', placeholder: 'e.g. CH3CH2CH2OH', examples: ['CH3CH2CH2OH', 'CH3CH2OCH3', 'C6H14', 'CH3COCH3', 'CHF3'], button: 'Compare', onSubmit: text => {
+        const r = SUBSTANCES.fromText(text);
+        if (r.error) return { ok: false, msg: r.error };
+        [sA, sB].forEach(x => { if (!x.input.querySelector(`option[value="${CSS.escape(r.sub.id)}"]`)) x.input.appendChild(h('option', { value: r.sub.id }, `${U.chemText(r.sub.f)} — yours`)); });
+        B = r.sub.id; sB.set(B); U.store.set('imfB', B); upd();
+        return { ok: true, msg: SUBSTANCES.describe(r) };
+      } });
+      b.append(U.panel('Pick two substances', h('div', { class: 'controls' }, sA.el, sB.el), h('div', { class: 'small muted' }, 'Classic AP comparisons:'), pick), own.el, cards, U.panel('Boiling points', cv.wrap), verdict);
       function card(x) {
         return U.panel(null, h('div', { class: 'flex-between' }, h('h2', { html: U.chem(x.f) }), h('span', { class: 'muted small' }, x.name)),
-          h('dl', { class: 'kv' }, ...[['Molar mass', x.M.toFixed(1) + ' g/mol'], ['Electrons', x.e], ['Polarity', x.polar ? 'polar' : 'nonpolar'], ['Boiling point', x.bp + ' °C']].flatMap(([k, v]) => [h('dt', null, k), h('dd', null, String(v))])),
+          h('dl', { class: 'kv' }, ...[['Molar mass', x.M.toFixed(1) + ' g/mol'], ['Electrons', x.e], ['Polarity', x.polar ? 'polar' : 'nonpolar'], ['Boiling point', (x.est ? '≈' : '') + x.bp + ' °C' + (x.est ? ' (estimated)' : '')]].flatMap(([k, v]) => [h('dt', null, k), h('dd', null, String(v))])),
           h('div', { class: 'row' }, ['LDF', 'Dipole–dipole', 'Hydrogen bonding'].map(n => h('span', { class: 'chip' + (SUBSTANCES.imfs(x).includes(n) ? '' : ' off') }, n))));
       }
       function draw(c, w, H) {

@@ -17,7 +17,7 @@ Press <kbd>/</kbd> to search topics. Use the moon/sun button for dark mode. Ever
 | Unit | Tools |
 | --- | --- |
 | 1 Atomic Structure | Moles & molar mass · Mass spectrometry · Periodic table & trends · Electron configurations · Photoelectron spectroscopy (PES) · Coulomb's law & shell model |
-| 2 Compound Structure | Bond types & electronegativity · Potential-energy curves · Ionic/metallic/network solids & lattice energy · Lewis structures (step-by-step, formal charge, resonance) · VSEPR 3D viewer (all 13 shapes, hybridization, polarity) |
+| 2 Compound Structure | Bond types & electronegativity · Potential-energy curves · Ionic/metallic/network solids & lattice energy · Lewis structures (step-by-step, formal charge, resonance, type your own) · VSEPR 3D viewer (all 13 shapes, multi-center molecules, hybridization, polarity, type your own) |
 | 3 IMFs & Properties | Intermolecular forces (animated forces, particle simulation, boiling-point comparisons, trends) · Phase diagrams & vapor pressure · Gas laws & KMT · Maxwell–Boltzmann · Solutions & chromatography · Spectroscopy, photoelectric effect & Beer's law |
 | 4 Chemical Reactions | Equation balancer & reaction types · Precipitation & net ionic equations · Stoichiometry & limiting reactant · Oxidation numbers, redox & half-reaction balancer |
 | 5 Kinetics | Collision theory simulation · Rate laws, half-life & initial rates · Energy profiles, mechanisms & catalysis |
@@ -27,6 +27,17 @@ Press <kbd>/</kbd> to search topics. Use the moon/sun button for dark mode. Ever
 | 9 Applications of Thermodynamics | Entropy & Gibbs free energy (ΔG vs T, ΔG° ↔ K, coupling) · Electrochemical cells (galvanic, Nernst, electrolysis & Faraday's law) |
 | Study tools | Reference sheet (equations, constants, ions, solubility rules, indicators, Ka/Kb) · Practice quiz (60+ questions with explanations) |
 
+### Try your own molecules
+
+Type a formula into the Lewis, VSEPR or IMF tools and the app builds the molecule itself: it counts valence electrons, completes octets, forms multiple bonds where needed, minimizes formal charges on expanded-octet atoms and finds resonance forms. It accepts:
+
+- one-central-atom formulas and ions: `PF5`, `XeO3`, `SO3^2-`, `NH4+`, oxyacids like `H2SO4` and `HNO3`
+- condensed organic formulas: `CH3CH2OH`, `CH3COOH`, `(CH3)2CHOH`, `CH3(CH2)2CH3`, `CH2=CH2`
+- straight-chain hydrocarbons from a molecular formula: `C3H8`, `C3H6`
+- single atoms and monatomic ions as Lewis dot symbols: `N`, `Cl-`
+
+Molecules with several central atoms get a 3D model too. In the IMF tools your molecule's boiling point is estimated from its electron count, polarity and hydrogen bonding, or measured data is used if the substance is in the built-in list. Other tools take your own input as well: any reaction for stoichiometry and bond-enthalpy ΔH, any gas for Maxwell–Boltzmann, any Ka/Kb for titrations and pH, and any ionic compound for Ksp and net ionic equations.
+
 The calculators do real chemistry, not lookups: equations are balanced with exact rational linear algebra, redox half-reactions are balanced in acid or base, pH comes from a full charge-balance solve (so titration curves, buffers and very dilute acids come out right), and equilibrium shifts are solved numerically from K.
 
 ## Project layout
@@ -35,7 +46,7 @@ The calculators do real chemistry, not lookups: equations are balanced with exac
 index.html            app shell; loads every script in order
 css/style.css         design tokens (light + dark) and components
 js/core.js            module registry, DOM/control helpers, canvas + plotting
-js/data/              periodic table and molecule library (Lewis/VSEPR data)
+js/data/              periodic table, molecule library, and the formula → structure builder
 js/modules/u1-*.js …  one file per topic, grouped by unit
 js/app.js             navigation, search, routing, home page
 tools/build.mjs       bundles everything into dist/*.html

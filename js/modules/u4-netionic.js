@@ -17,7 +17,7 @@ App.register({
     const COLORS = { Ag: '#b8bcc6', Pb: '#5c6070', Ba: '#3faf7a', Ca: '#4caf6a', Cu: '#3d8be0', Fe: '#d0702e', Na: '#9a62f0', K: '#8c4fd0', NH4: '#3d6ae0', Mg: '#46c486', Zn: '#7f84b4', NO3: '#e5413b', Cl: '#33b34f', I: '#7b4ac8', Br: '#a8402e', SO4: '#ecc53a', CO3: '#50565f', OH: '#e88aa0', PO4: '#f08a24', CrO4: '#e6b800', S: '#d4a20a' };
     const PPT_COLOR = { AgCl: '#f2f2f2', AgI: '#f0e68c', AgBr: '#f5f0c8', PbI2: '#f5d000', PbCl2: '#f2f2f2', BaSO4: '#f7f7f7', Ag2CrO4: '#b5352b', PbCrO4: '#f2c200', 'Cu(OH)2': '#5aa7e0', 'Fe(OH)3': '#a0522d', CuS: '#222', PbS: '#222', Ag2S: '#222', ZnS: '#f2f2f2' };
     const soluble = (c, a) => {
-      if (['Na', 'K', 'NH4'].includes(c) || a === 'NO3') return [true, `${c === 'NH4' ? 'NH₄⁺' : c === 'NO3' ? '' : c + '⁺'} and nitrate compounds are always soluble`];
+      if (['Li', 'Na', 'K', 'Rb', 'Cs', 'NH4'].includes(c) || ['NO3', 'CH3COO', 'ClO4', 'ClO3'].includes(a)) return [true, 'compounds of group 1 metals, NH₄⁺, nitrate, acetate and perchlorate are always soluble'];
       if (['Cl', 'Br', 'I'].includes(a)) return ['Ag', 'Pb'].includes(c) ? [false, 'halides of Ag⁺ and Pb²⁺ are insoluble'] : [true, 'most chlorides, bromides and iodides are soluble'];
       if (a === 'SO4') return ['Ba', 'Pb', 'Ca', 'Ag'].includes(c) ? [false, 'sulfates of Ba²⁺, Pb²⁺, Ca²⁺ and Ag⁺ are insoluble'] : [true, 'most sulfates are soluble'];
       if (a === 'OH') return c === 'Ba' ? [true, 'Ba(OH)₂ is soluble'] : [false, 'most hydroxides are insoluble'];
@@ -25,7 +25,7 @@ App.register({
     };
     const formula = (c, a) => {
       const qc = CAT[c][1], qa = -AN[a][1], g = U.gcd(qc, qa), nc = qa / g, na = qc / g;
-      const poly = x => x.length > 2 || /\d/.test(x) || x === 'OH';
+      const poly = x => x.length > 2 || /\d/.test(x) || ['OH', 'CN', 'HS'].includes(x);
       const part = (x, n) => n > 1 ? (poly(x) ? `(${x})${n}` : x + n) : x;
       return { f: part(c, nc) + part(a, na), nc, na };
     };
@@ -39,7 +39,23 @@ App.register({
     const out = h('div', { class: 'stack' });
     const cv = U.canvas(null, { aspect: 1.8, scope });
     el.append(h('div', { class: 'grid-viz' }, U.panel(null, cv.wrap, h('div', { class: 'row' }, pourBtn, U.btn('Reset', () => reset(), ''))), h('div', { class: 'stack' }, U.panel('Choose two aqueous solutions', selA.el, selB.el, h('div', { class: 'row' }, ['AgNO3 + NaCl', 'Pb(NO3)2 + KI', 'BaCl2 + Na2SO4', 'CuSO4 + NaOH', 'NaCl + KBr'].map((t2, i) => U.btn(U.chem(t2), () => { const P = [[0, 8], [1, 9], [2, 10], [4, 12], [8, 16]][i]; s1 = P[0]; s2 = P[1]; selA.set(s1); selB.set(s2); reset(); }, 'sm')))))));
-    el.appendChild(out);
+    const own = BUILDER.entry({ title: 'Add your own solution', label: 'Formula of a soluble ionic compound', placeholder: 'e.g. Ba(NO3)2', examples: ['Ba(NO3)2', 'Na3PO4', 'CuCl2', 'K2CO3', 'Sr(NO3)2', 'Li2SO4'], button: 'Add as Solution 2', onSubmit: text => {
+      const f = text.replace(/\s+/g, '');
+      const io = CHEM.ionic(f);
+      if (!io) return { ok: false, msg: `Could not split “${U.esc(f)}” into a metal (or NH₄⁺) cation and a known anion.` };
+      if (CAT[io.cat] && CAT[io.cat][1] !== io.qc) return { ok: false, msg: `This tool already uses ${io.cat} as ${io.cat}${U.supText((CAT[io.cat][1] > 1 ? CAT[io.cat][1] : '') + '+')}; one charge per metal is supported.` };
+      if (AN[io.an] && AN[io.an][1] !== io.qa) return { ok: false, msg: 'That anion’s charge conflicts with one already in use.' };
+      CAT[io.cat] = [io.cat, io.qc]; AN[io.an] = [io.an, io.qa];
+      const pal = ['#d4a20a', '#13a3a0', '#d44690', '#6b7785', '#8650d6', '#e8781c'];
+      [io.cat, io.an].forEach((x, i) => { if (!COLORS[x]) COLORS[x] = pal[(x.length * 7 + x.charCodeAt(0) + i) % pal.length]; });
+      const sol = soluble(io.cat, io.an);
+      if (!sol[0]) return { ok: false, msg: `${U.chem(f)} is not soluble in water (${sol[1]}), so it can’t be a starting solution. Try mixing solutions that would form it instead.` };
+      let k = SALTS.findIndex(p => p[0] === io.cat && p[1] === io.an);
+      if (k < 0) { SALTS.push([io.cat, io.an]); k = SALTS.length - 1; [selA, selB].forEach(sx => sx.input.appendChild(h('option', { value: k }, label([io.cat, io.an]) + '(aq)'))); }
+      s2 = k; selB.set(k); reset();
+      return { ok: true, msg: `Added ${U.chem(formula(io.cat, io.an).f)}(aq), which dissolves into ${ionHTML(io.cat, io.qc)} and ${ionHTML(io.an, io.qa)} ions. It is now Solution 2: press Pour together.` };
+    } });
+    el.append(own.el, out);
 
     let parts = [];
     function analyze() {

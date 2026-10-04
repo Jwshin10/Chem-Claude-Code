@@ -1311,6 +1311,8 @@ const MOLECULES = (() => {
     { id: 'becl2', f: 'BeCl2', name: 'Beryllium chloride', c: 'Be', L: [['Cl', 1], ['Cl', 1]], lp: 0, note: 'Be is stable with only 4 valence electrons (an incomplete octet).' },
     { id: 'co2', f: 'CO2', name: 'Carbon dioxide', c: 'C', L: [['O', 2], ['O', 2]], lp: 0 },
     { id: 'hcn', f: 'HCN', name: 'Hydrogen cyanide', c: 'C', L: [['H', 1], ['N', 3]], lp: 0 },
+    { id: 'n2o', f: 'N2O', name: 'Nitrous oxide', c: 'N', L: [['N', 2], ['O', 2]], lp: 0, note: 'N is the central atom even though O appears only once. Another resonance form, N≡N–O, also contributes.' },
+    { id: 'scn', f: 'SCN^-', name: 'Thiocyanate ion', c: 'C', L: [['S', 2], ['N', 2]], lp: 0, q: -1 },
     // steric number 3
     { id: 'bf3', f: 'BF3', name: 'Boron trifluoride', c: 'B', L: [['F', 1], ['F', 1], ['F', 1]], lp: 0, note: 'B has only 6 valence electrons (incomplete octet).' },
     { id: 'so3', f: 'SO3', name: 'Sulfur trioxide', c: 'S', L: [['O', 2], ['O', 2], ['O', 2]], lp: 0, note: 'Drawn with formal charges minimized (expanded octet on S). A structure with one S=O and two S–O bonds that obeys the octet rule is also accepted.' },
@@ -1386,20 +1388,34 @@ const MOLECULES = (() => {
   };
 
   /** build a drawable structure: {atoms:[{el,x,y,lp,fc,lpDirs}], bonds:[{a,b,order}], q} */
+  function evenLayout(B, lp) {
+    const n = B + lp, a = Array.from({ length: n }, (_, k) => 90 + k * 360 / n);
+    return [a.slice(0, B), a.slice(B)];
+  }
   function build(m, resIndex = 0) {
+    if (m.atom) return m.struct;
     let atoms, bonds;
     if (m.c) {
       const B = m.L.length;
-      const lay = LAYOUT[B + ',' + m.lp];
+      const lay = LAYOUT[B + ',' + m.lp] || evenLayout(B, m.lp);
       atoms = [{ el: m.c, x: 0, y: 0, lp: m.lp, fixedLp: lay[1] }];
       bonds = [];
       let orders = m.L.map(l => l[1]);
       if (resIndex > 0) orders = resonanceOrders(m)[resIndex] || orders;
       m.L.forEach((l, i) => {
         const a = lay[0][i] * Math.PI / 180;
-        const tl = m.tlp ? m.tlp[i] : (l[0] === 'H' ? 0 : 4 - orders[i]);
+        const tl = m.tlp ? m.tlp[i] : (l[0] === 'H' ? 0 : 4 - orders[i] - (l[2] || 0));
         atoms.push({ el: l[0], x: Math.cos(a), y: Math.sin(a), lp: tl });
         bonds.push({ a: 0, b: i + 1, order: orders[i] });
+      });
+      // hydrogens attached to ligands (e.g. the O–H groups of oxyacids)
+      m.L.forEach((l, i) => {
+        const nH = l[2] || 0, a = lay[0][i] * Math.PI / 180;
+        for (let k = 0; k < nH; k++) {
+          const t = a + (k - (nH - 1) / 2) * 0.9;
+          atoms.push({ el: 'H', x: Math.cos(a) + Math.cos(t) * 0.95, y: Math.sin(a) + Math.sin(t) * 0.95, lp: 0 });
+          bonds.push({ a: i + 1, b: atoms.length - 1, order: 1 });
+        }
       });
     } else {
       const bset = resIndex > 0 && m.res ? m.res[resIndex - 1] : m.bonds;
@@ -1407,7 +1423,8 @@ const MOLECULES = (() => {
       bonds = bset.map(([a, b, order]) => ({ a, b, order }));
       atoms.forEach((at, i) => {
         const s = bonds.filter(b => b.a === i || b.b === i).reduce((t, b) => t + b.order, 0);
-        at.lp = at.el === 'H' ? 0 : Math.max(0, 4 - s);
+        const ov = resIndex === 0 ? m.atoms[i][3] : null;
+        at.lp = ov != null ? ov : at.el === 'H' ? 0 : Math.max(0, 4 - s);
       });
     }
     // formal charges & lone pair directions
@@ -1451,7 +1468,7 @@ const MOLECULES = (() => {
   function resonanceOrders(m) {
     if (!m.c) return [m.bonds].concat(m.res || []);
     const base = m.L.map(l => l[1]);
-    const els = m.L.map(l => l[0]);
+    const els = m.L.map(l => l[0] + '|' + (l[2] || 0));
     const seen = new Set(), out = [];
     const perm = (arr, k) => {
       if (k === arr.length) {
@@ -1472,13 +1489,15 @@ const MOLECULES = (() => {
     return out;
   }
   function resonanceCount(m) {
+    if (m.atom) return 1;
     if (!m.c) return 1 + (m.res ? m.res.length : 0);
     if (m.tlp) return 1;
     return Math.min(6, resonanceOrders(m).length);
   }
 
   function totalValence(m) {
-    const els = m.c ? [m.c].concat(m.L.map(l => l[0])) : m.atoms.map(a => a[0]);
+    if (m.atom) return val(m.struct.atoms[0].el) - (m.q || 0);
+    const els = m.c ? [m.c].concat(m.L.flatMap(l => [l[0]].concat(Array(l[2] || 0).fill('H')))) : m.atoms.map(a => a[0]);
     return els.reduce((t, e) => t + val(e), 0) - (m.q || 0);
   }
 
@@ -1508,9 +1527,10 @@ const MOLECULES = (() => {
   const SYMMETRIC = new Set(['2,0', '3,0', '4,0', '5,0', '6,0', '5,3', '6,2']);
   function polarity(m) {
     if (m.q) return 'ion';
+    if (m.atom) return 'atom';
     const B = m.L.length;
-    if (B === 1) return m.L[0][0] === m.c ? 'nonpolar' : 'polar';
-    const same = m.L.every(l => l[0] === m.L[0][0]);
+    if (B === 1) return m.L[0][0] === m.c && !m.L[0][2] ? 'nonpolar' : 'polar';
+    const same = m.L.every(l => l[0] === m.L[0][0] && (l[2] || 0) === (m.L[0][2] || 0));
     if (!same) return 'polar';
     const key = (B + m.lp) + ',' + m.lp;
     if (!SYMMETRIC.has(key)) return 'polar';
@@ -1518,7 +1538,8 @@ const MOLECULES = (() => {
     return 'nonpolar';
   }
   function bondCounts(m) {
-    const bonds = m.c ? m.L.map(l => l[1]) : m.bonds.map(b => b[2]);
+    if (m.atom) return { sigma: 0, pi: 0 };
+    const bonds = m.c ? m.L.map(l => l[1]).concat(m.L.flatMap(l => Array(l[2] || 0).fill(1))) : m.bonds.map(b => b[2]);
     return { sigma: bonds.length, pi: bonds.reduce((t, o) => t + o - 1, 0) };
   }
 
@@ -1565,7 +1586,448 @@ const MOLECULES = (() => {
 
   const all = single.concat(multi);
   const byId = Object.fromEntries(all.map(m => [m.id, m]));
-  return { single, multi, all, byId, build, resonanceCount, totalValence, vsepr, polarity, bondCounts, domains3d, validate, val };
+  const setCustom = spec => { byId[spec.id] = spec; };
+  return { single, multi, all, byId, build, resonanceCount, totalValence, vsepr, polarity, bondCounts, domains3d, validate, val, lonePairDirs, setCustom, LAYOUT };
+})();
+
+/* ---- js/data/builder.js ---- */
+/* BUILDER: turns a typed formula into a molecule spec the Lewis, VSEPR and IMF tools can use.
+   Understands
+     - one-central-atom formulas: PF5, XeO3, SO3^2-, NH4+, HNO3, H2SO4 (H goes on O in oxyacids)
+     - condensed structural formulas: CH3CH2OH, CH3COOH, (CH3)2CHOH, CH3(CH2)2CH3, HCOOH
+     - straight-chain hydrocarbons from a molecular formula: C3H8, C3H6, C2H2
+     - single atoms and monatomic ions (Lewis dot symbols): N, Cl-, Mg2+
+   Electrons are placed with the textbook procedure (octets on outer atoms, leftovers on the
+   central atom, lone pairs turned into multiple bonds when an atom lacks an octet), then formal
+   charges are minimized on period-3+ atoms (expanded octets). */
+'use strict';
+const BUILDER = (() => {
+  const VAL = { H: 1, B: 3, C: 4, N: 3, O: 2, F: 1, Si: 4, P: 3, S: 2, Cl: 1, Se: 2, Br: 1, I: 1, Be: 2, Al: 3, Ge: 4, As: 3, Te: 2, Sn: 4, Pb: 4, Ga: 3 };
+  const MONO = new Set(['H', 'F', 'Cl', 'Br', 'I']);
+  const INCOMPLETE = new Set(['B', 'Be', 'Al', 'Ga', 'Sn', 'Pb']);
+  const SUPC = { '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9', '⁺': '+', '⁻': '-' };
+  const EX = ['PF5', 'XeO3', 'SO3^2-', 'ICl4^-', 'HNO3', 'H2SO4', 'COCl2', 'CH3CH2OH', 'CH3COOH', 'CH3CHO', '(CH3)2CHOH', 'C3H6', 'N2H4', 'Cl-'];
+  const E = s => ELEMENTS.bySym[s];
+  const en = s => E(s).en || 2.5;
+  const fmtQ = q => q ? '^' + (Math.abs(q) > 1 ? Math.abs(q) : '') + (q > 0 ? '+' : '-') : '';
+
+  /* ---------- reading the text ---------- */
+  function candidates(text) {
+    let s = String(text || '').trim();
+    s = s.replace(/[₀-₉]/g, c => String(c.charCodeAt(0) - 8320));
+    s = s.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻]+$/, m => '^' + m.split('').map(c => SUPC[c]).join(''));
+    s = s.replace(/[−–]/g, '-').replace(/≡/g, '#').trim();
+    if (!s) return [];
+    let m;
+    const sg = c => (c === '+' ? 1 : -1);
+    if ((m = s.match(/^(.*?)\s*\^\s*(\d*)\s*([+-])$/))) return [{ body: m[1], q: (m[2] ? +m[2] : 1) * sg(m[3]) }];
+    if ((m = s.match(/^(.*?)\s*\^\s*([+-])(\d+)$/))) return [{ body: m[1], q: +m[3] * sg(m[2]) }];
+    if ((m = s.match(/^(.*\S)\s+(\d*)([+-])$/))) return [{ body: m[1], q: (m[2] ? +m[2] : 1) * sg(m[3]) }];
+    if ((m = s.match(/^(.*?)(\d)([+-])$/))) {
+      const asCharge = { body: m[1], q: +m[2] * sg(m[3]) }, asSub = { body: m[1] + m[2], q: sg(m[3]) };
+      return /\d$/.test(m[1]) || /^[A-Z][a-z]?$/.test(m[1]) ? [asCharge, asSub] : [asSub, asCharge];
+    }
+    if ((m = s.match(/^(.*?)([+-])$/))) return [{ body: m[1], q: sg(m[2]) }];
+    return [{ body: s, q: 0 }];
+  }
+  const symbolsIn = body => (body.match(/[A-Z][a-z]?/g) || []);
+  const isCondensed = body => /[()=#]/.test(body) || symbolsIn(body).length !== new Set(symbolsIn(body)).size;
+  function countsOf(m) {
+    const c = {}, add = e => { c[e] = (c[e] || 0) + 1; };
+    if (m.atom) add(m.struct.atoms[0].el);
+    else if (m.c) { add(m.c); m.L.forEach(l => { add(l[0]); for (let k = 0; k < (l[2] || 0); k++) add('H'); }); }
+    else m.atoms.forEach(a => add(a[0]));
+    return c;
+  }
+  const keyOf = (counts, q) => Object.keys(counts).sort().map(k => k + counts[k]).join('') + '|' + q;
+
+  /** main entry: returns { spec, library, note } or { error } */
+  function fromText(text) {
+    const cands = candidates(text);
+    if (!cands.length) return { error: 'Type a formula first.' };
+    let err = null;
+    for (const c of cands) {
+      const body = c.body.replace(/\s+/g, '');
+      if (!body) continue;
+      const exact = MOLECULES.all.find(m => m.f.split('^')[0] === body && (m.q || 0) === c.q);
+      if (exact) return { spec: exact, library: true };
+      if (isCondensed(body)) continue;
+      let counts;
+      try { counts = U.parseFormula(body); } catch (e) { err = err || e.message + '.'; continue; }
+      const hits = MOLECULES.all.filter(m => keyOf(countsOf(m), m.q || 0) === keyOf(counts, c.q));
+      if (hits.length) return { spec: hits[0], library: true, note: hits.length > 1 ? `More than one molecule has this formula (${hits.map(h => h.name).join(', ')}). Showing ${hits[0].name}; type a condensed formula such as ${hits.map(h => h.f).join(' or ')} to choose.` : null };
+    }
+    for (const c of cands) {
+      const body = c.body.replace(/\s+/g, '');
+      if (!body) continue;
+      let r;
+      try { r = build(body, c.q); } catch (e) { r = { error: e.message }; }
+      if (!r.error) return r;
+      err = err || r.error;
+    }
+    return { error: err || 'That formula could not be read.' };
+  }
+
+  /* ---------- skeletons ---------- */
+  function build(body, q) {
+    const clean = body.replace(/[=#]/g, '');
+    let counts;
+    try { counts = U.parseFormula(clean); } catch (e) { return { error: e.message + '. Use element symbols with correct capitals, like CH3OH or SO4^2-.' }; }
+    for (const el in counts) {
+      const x = E(el);
+      if (x.valence == null || ['alkali', 'transition', 'lanthanide', 'actinide'].includes(x.cat) || (x.cat === 'alkaline' && el !== 'Be'))
+        return { error: `${x.name} forms ionic compounds (or uses d orbitals), so it isn’t drawn as a Lewis structure here. Try a molecule or polyatomic ion made of nonmetals.` };
+    }
+    const nAtoms = Object.values(counts).reduce((t, x) => t + x, 0);
+    if (nAtoms > 30) return { error: 'That molecule is too large to draw here (30 atoms maximum).' };
+    const f = clean + fmtQ(q);
+    if (nAtoms === 1) return atomSpec(Object.keys(counts)[0], q, f);
+    let g;
+    if (isCondensed(body)) g = condensed(clean);
+    else if ((counts.C || 0) >= 2 && Object.keys(counts).every(e => e === 'C' || e === 'H')) g = hydrocarbon(counts);
+    else if ((counts.C || 0) >= 2) return { error: `${U.chem(f)} can be drawn in more than one way. Type a condensed structural formula instead, such as CH3CH2OH, CH3OCH3 or CH3COOH.` };
+    else g = central(counts);
+    if (g.error) return g;
+    // X–Y–H chains (HOCl, HOBr…) read better as a chain with two centres
+    if (g.kind === 'single' && g.ligs.length === 1 && g.hOn[0] > 0) { g.kind = 'multi'; g.chain = [0, 1]; }
+    const over = g.els.findIndex((el, i) => E(el).period === 2 && g.edges.filter(e => e[0] === i || e[1] === i).length > 4);
+    if (over >= 0) return { error: `That structure would give ${g.els[over]} more than four bonds. Check the formula.` };
+    const r = assign(g.els, g.edges, q);
+    if (r.error) return r;
+    const spec = g.kind === 'single' ? singleSpec(g, r, q, f) : multiSpec(g, r, q, f);
+    if (spec.error) return spec;
+    return { spec, library: false, note: r.notes.length ? r.notes.join(' ') : null };
+  }
+
+  function atomSpec(el, q, f) {
+    const v = E(el).valence;
+    if (v == null) return { error: `${E(el).name} is not a main-group element.` };
+    const e = v - q;
+    if (e < 0 || e > 8 || (E(el).period === 1 && e > 2)) return { error: `${U.chem(f)} would have ${e} valence electrons, which is not a stable ion.` };
+    const pos = [90, 0, 270, 180];
+    const per = E(el).period === 1 ? 1 : 4;
+    const pairs = per === 1 ? Math.floor(e / 2) : Math.max(0, e - 4), singles = per === 1 ? e % 2 : e - 2 * pairs;
+    const R = d => d * Math.PI / 180;
+    const atom = { el, x: 0, y: 0, lp: pairs, lpDirs: pos.slice(0, pairs).map(R), singleDirs: pos.slice(pairs, pairs + singles).map(R), fc: 0, bondCount: 0 };
+    return { spec: { id: 'custom', custom: true, atom: true, f, name: q ? 'Your ion' : 'Your atom', q, struct: { atoms: [atom], bonds: [], q } }, library: false, note: null };
+  }
+
+  /* one central atom; ligands; H atoms on the central atom or on O/N ligands */
+  function central(counts) {
+    const heavy = [];
+    Object.keys(counts).forEach(e => { if (e !== 'H') for (let k = 0; k < counts[e]; k++) heavy.push(e); });
+    let nH = counts.H || 0;
+    if (!heavy.length) return nH === 2 ? { kind: 'single', els: ['H', 'H'], edges: [[0, 1]], ligs: ['H'], hOn: [0], hC: 0 } : { error: 'That hydrogen-only formula is not a stable molecule.' };
+    const uniq = [...new Set(heavy)];
+    const ones = uniq.filter(e => counts[e] === 1);
+    const c = (ones.length ? ones : uniq).sort((a, b) => en(a) - en(b))[0];
+    const ligs = heavy.slice(); ligs.splice(ligs.indexOf(c), 1);
+    ligs.sort((a, b) => en(b) - en(a) || a.localeCompare(b));
+    const hOn = ligs.map(() => 0);
+    let hC = 0;
+    const nO = ligs.filter(e => e === 'O').length;
+    const oxy = nO >= 2 || !['C', 'N', 'O', 'B', 'Si'].includes(c);
+    if (oxy) ligs.forEach((e, i) => { if (nH && e === 'O') { hOn[i]++; nH--; } });
+    else { const k = Math.min(nH, Math.max(0, (VAL[c] ?? 0) - ligs.length)); hC = k; nH -= k; }
+    ligs.forEach((e, i) => { if (!['O', 'N', 'S', 'P', 'C'].includes(e)) return; const k = Math.min(nH, Math.max(0, (VAL[e] ?? 1) - 1 - hOn[i])); hOn[i] += k; nH -= k; });
+    hC += nH;
+    const els = [c].concat(ligs), edges = ligs.map((_, i) => [0, i + 1]);
+    ligs.forEach((e, i) => { for (let k = 0; k < hOn[i]; k++) { els.push('H'); edges.push([i + 1, els.length - 1]); } });
+    for (let k = 0; k < hC; k++) { els.push('H'); edges.push([0, els.length - 1]); }
+    return { kind: 'single', els, edges, ligs, hOn, hC };
+  }
+
+  /* straight chain for CnHm */
+  function hydrocarbon(counts) {
+    const n = counts.C, m = counts.H || 0, u = (2 * n + 2 - m) / 2;
+    if (!Number.isInteger(u) || u < 0) return { error: 'That hydrocarbon formula is not possible. Check the number of H atoms.' };
+    if (u > 2) return { error: 'That formula needs rings or several multiple bonds. Type a condensed formula such as CH2=CHCH=CH2.' };
+    const hc = Array.from({ length: n }, (_, i) => (i === 0 || i === n - 1) ? 3 : 2);
+    hc[0] -= u; hc[1] -= u;
+    if (hc.some(x => x < 0)) return { error: 'That formula would need a ring.' };
+    const els = [], edges = [], chain = [];
+    for (let i = 0; i < n; i++) { els.push('C'); chain.push(els.length - 1); if (i) edges.push([chain[i - 1], chain[i]]); }
+    chain.forEach((c, i) => { for (let k = 0; k < hc[i]; k++) { els.push('H'); edges.push([c, els.length - 1]); } });
+    return { kind: 'multi', els, edges, chain };
+  }
+
+  /* condensed structural formulas */
+  function condensed(str) {
+    const els = [], edges = [], chain = [], deg = [];
+    const add = (el, parent) => { els.push(el); deg.push(0); const k = els.length - 1; if (parent != null) { edges.push([parent, k]); deg[parent]++; deg[k]++; } return k; };
+    const cap = k => (VAL[els[k]] ?? 4) - deg[k];
+    function seq(s, attach, main) {
+      let i = 0, prev = attach, pendH = 0, pend = [];
+      const readNum = () => { let n = ''; while (i < s.length && /\d/.test(s[i])) n += s[i++]; return n ? +n : 1; };
+      while (i < s.length) {
+        if (s[i] === '(') {
+          i++; const start = i; let d = 1;
+          while (i < s.length && d) { if (s[i] === '(') d++; else if (s[i] === ')') d--; i++; }
+          if (d) throw new Error('Unbalanced parentheses.');
+          const sub = s.slice(start, i - 1), n = readNum();
+          if (!sub) throw new Error('Empty parentheses.');
+          if (prev == null) { pend.push([sub, n]); continue; }
+          const more = i < s.length;
+          if (n > 1 && cap(prev) < n + (more ? 1 : 0)) { for (let k = 0; k < n; k++) prev = seq(sub, prev, main); }
+          else for (let k = 0; k < n; k++) seq(sub, prev, false);
+          continue;
+        }
+        if (s[i] === ')') throw new Error('Unbalanced parentheses.');
+        if (!/[A-Z]/.test(s[i])) throw new Error(`Unexpected “${s[i]}”.`);
+        let el = s[i++];
+        while (i < s.length && /[a-z]/.test(s[i])) el += s[i++];
+        if (!E(el)) throw new Error(`Unknown element “${el}”.`);
+        const n = readNum();
+        if (MONO.has(el)) {
+          if (prev == null) { if (el === 'H') pendH += n; else pend.push([el, n]); }
+          else for (let k = 0; k < n; k++) add(el, prev);
+          continue;
+        }
+        if (n !== 1) throw new Error(`“${el}${n}” can’t be placed without guessing (rings aren’t supported). Write each atom of the chain separately, e.g. CH3CH2CH3.`);
+        let branch = false;
+        if (prev != null && (el === 'O' || el === 'S') && els[prev] === 'C' && deg[prev] <= 1) {
+          const nextIsH = s[i] === 'H' && !/[a-z]/.test(s[i + 1] || '');
+          if (i < s.length && !nextIsH) branch = true;   // C(=O) followed by more of the chain
+        }
+        const k = add(el, prev);
+        pend.forEach(([sub, m]) => { for (let r = 0; r < m; r++) { if (MONO.has(sub)) add(sub, k); else seq(sub, k, false); } });
+        pend = [];
+        for (let r = 0; r < pendH; r++) add('H', k);
+        pendH = 0;
+        if (!branch) { prev = k; if (main) chain.push(k); }
+      }
+      if (pendH || pend.length) throw new Error('The formula ends before the atoms it describes are attached.');
+      return prev;
+    }
+    seq(str, null, true);
+    if (!els.length) return { error: 'No atoms found.' };
+    return { kind: 'multi', els, edges, chain };
+  }
+
+  /* ---------- electrons ---------- */
+  function assign(els, edges, q) {
+    const n = els.length, idx = els.map((_, i) => i), notes = [];
+    const V = els.reduce((t, e) => t + E(e).valence, 0) - q;
+    if (V % 2) return { error: `This species has an odd number of valence electrons (${V}), so it is a radical. AP Lewis structures use even electron counts.` };
+    const order = edges.map(() => 1), lp = els.map(() => 0);
+    const deg = idx.map(i => edges.filter(e => e[0] === i || e[1] === i).length);
+    let R = V - 2 * edges.length;
+    if (R < 0) return { error: 'There are not enough valence electrons to connect these atoms. Check the formula and charge.' };
+    const bsum = i => edges.reduce((t, e, k) => t + (e[0] === i || e[1] === i ? order[k] : 0), 0);
+    const elec = i => 2 * bsum(i) + 2 * lp[i];
+    const term = idx.filter(i => els[i] !== 'H' && deg[i] === 1).sort((a, b) => en(els[b]) - en(els[a]));
+    const inner = idx.filter(i => els[i] !== 'H' && deg[i] !== 1).sort((a, b) => en(els[b]) - en(els[a]));
+    for (const i of term.concat(inner)) { const need = Math.max(0, (8 - elec(i)) / 2); const give = Math.min(need, R / 2); lp[i] += give; R -= 2 * give; }
+    if (R > 0) {
+      const exp = inner.concat(term).filter(i => E(els[i]).period >= 3).sort((a, b) => deg[b] - deg[a]);
+      if (!exp.length) return { error: 'There are more electrons than period-2 atoms can hold. Check the formula and charge.' };
+      lp[exp[0]] += R / 2; R = 0;
+      notes.push(`${els[exp[0]]} has an expanded octet (period ${E(els[exp[0]]).period} atoms can hold more than 8 electrons).`);
+    }
+    for (let it = 0; it < 40; it++) {
+      const def = idx.filter(i => els[i] !== 'H' && !INCOMPLETE.has(els[i]) && elec(i) < 8).sort((a, b) => elec(a) - elec(b));
+      if (!def.length) break;
+      let done = false;
+      for (const i of def) {
+        const c = edges.map((e, k) => ({ k, j: e[0] === i ? e[1] : e[1] === i ? e[0] : -1 }))
+          .filter(o => o.j >= 0 && lp[o.j] > 0 && !MONO.has(els[o.j]) && order[o.k] < 3)
+          .sort((x, y) => lp[y.j] - lp[x.j]);
+        if (!c.length) continue;
+        lp[c[0].j]--; order[c[0].k]++; done = true; break;
+      }
+      if (!done) break;
+    }
+    idx.forEach(i => { if (els[i] !== 'H' && elec(i) < 8) notes.push(INCOMPLETE.has(els[i]) ? `${els[i]} is stable with an incomplete octet (${elec(i)} electrons).` : `${els[i]} ends up with only ${elec(i)} electrons; this species is unusual.`); });
+    const fc = i => E(els[i]).valence - 2 * lp[i] - bsum(i);
+    // minimize formal charge on period-3+ atoms by expanding their octets
+    for (let it = 0; it < 12; it++) {
+      let changed = false;
+      for (const i of idx) {
+        if (E(els[i]).period < 3 || fc(i) <= 0) continue;
+        const c = edges.map((e, k) => ({ k, j: e[0] === i ? e[1] : e[1] === i ? e[0] : -1 }))
+          .filter(o => o.j >= 0 && fc(o.j) < 0 && lp[o.j] > 0 && ['O', 'N', 'S'].includes(els[o.j]) && order[o.k] < 3);
+        if (!c.length) continue;
+        lp[c[0].j]--; order[c[0].k]++; changed = true;
+        if (!notes.some(t => t.includes('formal charge'))) notes.push(`Double bonds to ${els[i]} were added to bring its formal charge toward zero (expanded octet). A structure that keeps every octet is also accepted on the AP exam.`);
+      }
+      if (!changed) break;
+    }
+    return { order, lp, notes };
+  }
+
+  /* ---------- specs ---------- */
+  function singleSpec(g, r, q, f) {
+    const ordOf = j => r.order[g.edges.findIndex(e => e[0] === 0 && e[1] === j)];
+    const L = g.ligs.map((e, i) => [e, ordOf(i + 1), g.hOn[i]]);
+    for (let k = 0; k < g.hC; k++) L.push(['H', 1, 0]);
+    const lp = r.lp[0];
+    if (L.length + lp > 6) return { error: 'This species would need more than six electron domains, which goes beyond AP Chemistry.' };
+    const tlp = L.map((l, i) => i < g.ligs.length ? r.lp[i + 1] : 0);
+    const oct = L.map(l => l[0] === 'H' ? 0 : 4 - l[1] - (l[2] || 0));
+    const spec = { id: 'custom', custom: true, f, name: q ? 'Your ion' : 'Your molecule', c: g.els[0], L, lp, q };
+    if (tlp.some((v, i) => v !== oct[i])) spec.tlp = tlp;
+    return spec;
+  }
+  function multiSpec(g, r, q, f) {
+    const pos = layout(g);
+    const n = g.els.length;
+    const bsum = i => g.edges.reduce((t, e, k) => t + (e[0] === i || e[1] === i ? r.order[k] : 0), 0);
+    const atoms = g.els.map((el, i) => { const def = el === 'H' ? 0 : Math.max(0, 4 - bsum(i)); return r.lp[i] !== def ? [el, pos[i][0], pos[i][1], r.lp[i]] : [el, pos[i][0], pos[i][1]]; });
+    const bonds = g.edges.map((e, k) => [e[0], e[1], r.order[k]]);
+    const spec = { id: 'custom', custom: true, f, name: q ? 'Your ion' : 'Your molecule', atoms, bonds, q };
+    if (!atoms.some(a => a.length > 3)) {
+      const res = resonance(g, r);
+      if (res.length) spec.res = res;
+    }
+    return spec;
+  }
+  /* move a double bond between equivalent terminal atoms (e.g. the two O atoms of a carboxylate) */
+  function resonance(g, r) {
+    const out = [], deg = g.els.map((_, i) => g.edges.filter(e => e[0] === i || e[1] === i).length);
+    g.els.forEach((_, a) => {
+      const nb = g.edges.map((e, k) => ({ k, j: e[0] === a ? e[1] : e[1] === a ? e[0] : -1 })).filter(o => o.j >= 0 && deg[o.j] === 1 && ['O', 'S', 'N'].includes(g.els[o.j]));
+      const dbl = nb.filter(o => r.order[o.k] === 2), sgl = nb.filter(o => r.order[o.k] === 1);
+      dbl.forEach(d => sgl.forEach(s => {
+        if (g.els[d.j] !== g.els[s.j] || out.length >= 5) return;
+        const ord = r.order.slice(); ord[d.k] = 1; ord[s.k] = 2;
+        out.push(g.edges.map((e, k) => [e[0], e[1], ord[k]]));
+      }));
+    });
+    return out;
+  }
+  function layout(g) {
+    const n = g.els.length, pos = g.els.map(() => null), adj = g.els.map(() => []);
+    g.edges.forEach(([a, b]) => { adj[a].push(b); adj[b].push(a); });
+    const chain = g.chain && g.chain.length ? g.chain : [g.els.findIndex(e => e !== 'H')];
+    chain.forEach((k, j) => { pos[k] = [j, 0]; });
+    const inChain = new Set(chain), D = Math.PI / 180;
+    const place = (k, parent, ang) => {
+      pos[k] = [pos[parent][0] + Math.cos(ang), pos[parent][1] + Math.sin(ang)];
+      const kids = adj[k].filter(x => x !== parent && !pos[x]).sort((a, b) => (g.els[a] === 'H') - (g.els[b] === 'H'));
+      const offs = { 1: [0], 2: [-60, 60], 3: [-90, 0, 90], 4: [-90, -30, 30, 90] }[kids.length] || kids.map((_, i) => -90 + 180 * i / Math.max(1, kids.length - 1));
+      kids.forEach((c, i) => place(c, k, ang + offs[i] * D));
+    };
+    chain.forEach((k, j) => {
+      const last = chain.length - 1;
+      const order = chain.length === 1 ? [0, 180, 90, 270, 45, 135, 225, 315] : j === 0 ? [180, 90, 270, 135, 225] : j === last ? [0, 90, 270, 45, 315] : [90, 270, 45, 135, 225, 315];
+      adj[k].filter(x => !inChain.has(x) && !pos[x]).sort((a, b) => (g.els[a] === 'H') - (g.els[b] === 'H')).forEach((x, i) => place(x, k, (order[i] ?? 30 * i) * D));
+    });
+    return pos.map(p => p || [0, 0]);
+  }
+
+  /* ---------- 3-D embedding for molecules with several central atoms (tree-shaped) ---------- */
+  const SLOTS = {
+    1: [[0, 1, 0]], 2: [[0, 1, 0], [0, -1, 0]], 3: [[0, 1, 0], [0.866, -0.5, 0], [-0.866, -0.5, 0]],
+    4: [[0, 1, 0], [0.9428, -1 / 3, 0], [-0.4714, -1 / 3, 0.8165], [-0.4714, -1 / 3, -0.8165]],
+    5: [[0, 1, 0], [0, -1, 0], [1, 0, 0], [-0.5, 0, 0.866], [-0.5, 0, -0.866]],
+    6: [[0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]],
+  };
+  const rot = (v, k, th) => { const c = Math.cos(th), s = Math.sin(th), d = k[0] * v[0] + k[1] * v[1] + k[2] * v[2]; const x = [k[1] * v[2] - k[2] * v[1], k[2] * v[0] - k[0] * v[2], k[0] * v[1] - k[1] * v[0]]; return [0, 1, 2].map(i => v[i] * c + x[i] * s + k[i] * d * (1 - c)); };
+  const norm = v => { const l = Math.hypot(...v) || 1; return v.map(x => x / l); };
+  function embed(spec) {
+    const s = MOLECULES.build(spec);
+    const n = s.atoms.length, adj = s.atoms.map(() => []);
+    s.bonds.forEach(b => { adj[b.a].push(b.b); adj[b.b].push(b.a); });
+    if (s.bonds.length >= n) return { ring: true };
+    const root = s.atoms.map((a, i) => i).filter(i => s.atoms[i].el !== 'H').sort((a, b) => adj[b].length - adj[a].length)[0] ?? 0;
+    const pos = Array(n).fill(null), lps = [];
+    pos[root] = [0, 0, 0];
+    const queue = [[root, -1, 0]];
+    while (queue.length) {
+      const [a, p, depth] = queue.shift();
+      const kids = adj[a].filter(x => x !== p).sort((x, y) => (s.atoms[x].el === 'H') - (s.atoms[y].el === 'H'));
+      const dom = adj[a].length + s.atoms[a].lp;
+      const slots = SLOTS[Math.min(6, Math.max(1, dom))];
+      let tf = v => v;
+      if (p >= 0) {
+        const t = norm(pos[p].map((x, i) => x - pos[a][i]));
+        let k = [t[2], 0, -t[0]], th = Math.acos(U.clamp(t[1], -1, 1));
+        if (Math.hypot(...k) < 1e-6) k = [1, 0, 0]; else k = norm(k);
+        const twist = dom === 4 ? (depth % 2) * Math.PI / 3 : 0;
+        tf = v => rot(rot(v, k, th), t, twist);
+      }
+      const free = p >= 0 ? slots.slice(1) : slots.slice();
+      kids.forEach((c, i) => {
+        const d = norm(tf(free[i] || [1, 0, 0]));
+        const len = s.atoms[c].el === 'H' || s.atoms[a].el === 'H' ? 0.82 : 1.1;
+        pos[c] = pos[a].map((x, j) => x + d[j] * len);
+        queue.push([c, a, depth + 1]);
+      });
+      for (let k = kids.length; k < free.length && k - kids.length < s.atoms[a].lp; k++) lps.push({ from: a, v: norm(tf(free[k])) });
+    }
+    const heavy = pos.filter((p, i) => s.atoms[i].el !== 'H');
+    const cen = [0, 1, 2].map(j => heavy.reduce((t, p) => t + p[j], 0) / heavy.length);
+    const P = pos.map(p => p.map((x, j) => x - cen[j]));
+    const atoms = s.atoms.map((a, i) => ({ el: a.el, p: P[i], r: a.el === 'H' ? 0.2 : 0.3 }));
+    // dipole: bond dipoles (toward the more electronegative atom) + lone pairs
+    const mu = [0, 0, 0];
+    s.bonds.forEach(b => { const d = norm(P[b.b].map((x, j) => x - P[b.a][j])), k = en(s.atoms[b.b].el) - en(s.atoms[b.a].el); for (let j = 0; j < 3; j++) mu[j] += d[j] * k; });
+    lps.forEach(l => { for (let j = 0; j < 3; j++) mu[j] += l.v[j] * 0.6; });
+    const hydrocarbon = s.atoms.every(a => a.el === 'C' || a.el === 'H');
+    const mag = hydrocarbon ? 0 : Math.hypot(...mu);
+    const radius = Math.max(...atoms.map(a => Math.hypot(...a.p) + a.r));
+    return { atoms, bonds: s.bonds.map(b => ({ a: b.a, b: b.b, order: b.order })), lps, dipole: mag > 0.35 ? norm(mu) : null, polar: mag > 0.35, radius, multi: true };
+  }
+
+  /* ---------- properties for the IMF tools ---------- */
+  function properties(spec) {
+    const s = MOLECULES.build(spec);
+    let e = 0, M = 0;
+    s.atoms.forEach(a => { e += E(a.el).Z; M += E(a.el).mass; });
+    e -= spec.q || 0;
+    let polar = false;
+    if (spec.c) polar = MOLECULES.polarity(spec) === 'polar';
+    else if (!spec.atom) { const m = embed(spec); polar = m.ring ? !s.atoms.every(a => a.el === 'C' || a.el === 'H') : m.polar; }
+    const don = { O: 0, N: 0, F: 0 };
+    s.bonds.forEach(b => { const x = s.atoms[b.a].el, y = s.atoms[b.b].el; if (x === 'H' && don[y] != null) don[y]++; if (y === 'H' && don[x] != null) don[x]++; });
+    const hb = don.O + don.N + don.F > 0;
+    const bpK = 30 * Math.pow(e, 0.6) + (polar ? 50 : 0) + 110 * Math.min(2, don.O) + 55 * Math.min(2, don.N) + 130 * Math.min(1, don.F);
+    const bp = Math.round((bpK - 273.15) / 5) * 5, mp = Math.round((0.62 * bpK - 273.15) / 5) * 5;
+    return { e, M, polar, hb, donors: don, bp, mp };
+  }
+
+  /* ---------- UI helpers ---------- */
+  /** small form: text box + button + example chips + feedback. onSubmit(text) -> {ok, msg} */
+  function entry({ title, label, value, placeholder, examples, button = 'Build', onSubmit, hint }) {
+    const h = U.h;
+    const msg = h('div');
+    const run = v => { let r; try { r = onSubmit(v.trim()); } catch (e) { console.error(e); r = { ok: false, msg: 'Something went wrong: ' + e.message }; } U.clear(msg); if (r && r.msg) msg.appendChild(U.callout(r.msg, r.ok ? (r.warn ? 'warn' : 'good') : 'bad')); };
+    const inp = U.textInput({ label, value: value || '', placeholder, onEnter: v => run(v) });
+    const chips = examples && examples.length ? h('div', { class: 'row' }, h('span', { class: 'tiny muted' }, 'Try:'), examples.map(x => U.btn(U.chem(x), () => { inp.set(x); run(x); }, 'sm'))) : null;
+    const el = U.panel(title || null, h('div', { class: 'row end', style: { flexWrap: 'nowrap' } }, h('div', { class: 'grow', style: { minWidth: 0 } }, inp.el), U.btn(button, () => run(inp.value), 'primary')), hint ? h('p', { class: 'small muted', html: hint }) : null, chips, msg);
+    return { el, input: inp, run };
+  }
+  /** register (or restore) the user's molecule; returns {spec, note} or {error} */
+  function useText(text) {
+    const r = fromText(text);
+    if (r.error) return r;
+    if (!r.library) MOLECULES.setCustom(r.spec);
+    U.store.set('customMol', text);
+    return r;
+  }
+  function restore() {
+    const t = U.store.get('customMol', '');
+    if (!t) return null;
+    const r = fromText(t);
+    if (!r.error && !r.library) MOLECULES.setCustom(r.spec);
+    return r.error ? null : r;
+  }
+  /** the molecule panel shared by the Lewis and VSEPR tools */
+  function moleculePanel(onUse) {
+    return entry({
+      title: 'Type your own molecule or ion', label: 'Formula', value: U.store.get('customMol', ''), placeholder: 'e.g. PF5, SO3^2-, CH3CH2OH',
+      examples: EX.slice(0, 10), button: 'Build',
+      hint: 'Use ^ or a trailing sign for charge (NH4+, SO4^2-). For organic molecules type a condensed formula such as CH3CH2OH or (CH3)2CO.',
+      onSubmit: text => {
+        if (!text) return { ok: false, msg: 'Type a formula first.' };
+        const r = useText(text);
+        if (r.error) return { ok: false, msg: r.error };
+        onUse(r.spec);
+        return { ok: true, warn: !!r.note, msg: r.library ? `Found <b>${r.spec.name}</b> (${U.chem(r.spec.f)}) in the built-in library.` + (r.note ? ' ' + r.note : '') : `Built ${U.chem(r.spec.f)}.` + (r.note ? ' ' + r.note : '') };
+      },
+    });
+  }
+  return { fromText, properties, embed, entry, useText, restore, moleculePanel, candidates, EX };
 })();
 
 /* ---- js/modules/u1-moles.js ---- */
@@ -2768,6 +3230,7 @@ const LEWIS = {
         const nx = -Math.sin(dir), ny = -Math.cos(dir);
         [-1, 1].forEach(k => { c.beginPath(); c.arc(px + nx * 3.6 * k, py + ny * 3.6 * k, 2.3, 0, 7); c.fillStyle = o.lpColor || t.ink2; c.fill(); });
       });
+      (a.singleDirs || []).forEach(dir => { const r = fs * 0.85; c.beginPath(); c.arc(x + Math.cos(dir) * r, y - Math.sin(dir) * r, 2.4, 0, 7); c.fillStyle = o.lpColor || t.ink2; c.fill(); });
       if (o.formal && a.fc) {
         // put the badge in the widest empty direction around the atom
         const i = s.atoms.indexOf(a);
@@ -2795,7 +3258,7 @@ const LEWIS = {
 
 App.register({
   id: 'lewis', unit: 2, sym: 'Lw', title: 'Lewis Structures',
-  desc: 'Step-by-step Lewis diagrams with formal charges and resonance for 50+ molecules and ions.',
+  desc: 'Step-by-step Lewis diagrams with formal charges and resonance. Pick from 58 molecules and ions or type your own formula.',
   tags: ['lewis structure', 'lewis diagram', 'dot structure', 'formal charge', 'resonance', 'octet rule', 'expanded octet', 'lone pairs', 'valence electrons', 'bond diagram'],
   keyIdeas: [
     'Count all valence electrons, add one for each negative charge and subtract one for each positive charge.',
@@ -2807,6 +3270,7 @@ App.register({
   ],
   render(el, scope) {
     const h = U.h;
+    BUILDER.restore();
     let id = U.store.get('lewisId', 'no3'), res = 0, step = 5, formal = true;
     if (!MOLECULES.byId[id]) id = 'no3';
     const opts = [
@@ -2821,7 +3285,15 @@ App.register({
     const cv = U.canvas(null, { aspect: 1.45, scope, draw });
     el.append(h('div', { class: 'grid-viz' },
       h('div', { class: 'stack' }, U.panel(null, h('div', { class: 'flex-between' }, h('h3', { id: 'lwTitle' }), resBox), cv.wrap), stepBox),
-      h('div', { class: 'stack' }, U.panel('Choose', sel.el, fc.el), infoBox)));
+      h('div', { class: 'stack' }, U.panel('Choose', sel.el, fc.el), BUILDER.moleculePanel(spec => { id = spec.id; res = 0; step = 5; U.store.set('lewisId', id); syncCustom(); update(); }).el, infoBox)));
+    function syncCustom() {
+      const old = sel.input.querySelector('optgroup[data-custom]');
+      if (old) old.remove();
+      const m = MOLECULES.byId.custom;
+      if (m) { const g = h('optgroup', { label: 'Your molecule', 'data-custom': '1' }, h('option', { value: 'custom' }, U.chemText(m.f) + ' — ' + m.name)); sel.input.insertBefore(g, sel.input.firstChild); }
+      sel.set(id);
+    }
+    syncCustom();
 
     function structure() {
       const m = MOLECULES.byId[id];
@@ -2829,25 +3301,21 @@ App.register({
       // step-by-step for single-centre molecules
       const s = MOLECULES.build(m, 0);
       const total = MOLECULES.totalValence(m);
-      const st = { atoms: s.atoms.map(a => Object.assign({}, a)), bonds: s.bonds.map(b => Object.assign({}, b, { order: 1 })), q: s.q };
-      const B = m.L.length;
-      if (step === 1) { st.bonds = []; st.atoms.forEach(a => { a.lpDirs = []; a.fc = 0; }); return st; }
-      st.atoms.forEach(a => { a.fc = 0; });
-      if (step === 2) { st.atoms.forEach(a => a.lpDirs = []); return st; }
-      let left = total - 2 * B;
-      st.atoms.slice(1).forEach(a => {
-        const need = a.el === 'H' ? 0 : 3;
-        const give = Math.min(need, Math.floor(left / 2));
-        a.lpDirs = a.lpDirs ? lpFor(a, give) : [];
+      const st = { atoms: s.atoms.map(a => Object.assign({}, a, { fc: 0, lpDirs: [] })), bonds: s.bonds.map(b => Object.assign({}, b, { order: 1 })), q: s.q };
+      if (step === 1) { st.bonds = []; return st; }
+      if (step === 2) return st;
+      let left = total - 2 * st.bonds.length;
+      const dirsOf = i => st.bonds.filter(b => b.a === i || b.b === i).map(b => { const o = st.atoms[b.a === i ? b.b : b.a], a = st.atoms[i]; return Math.atan2(o.y - a.y, o.x - a.x); });
+      st.atoms.forEach((a, i) => {
+        if (i === 0 || a.el === 'H') return;
+        const give = Math.min(Math.max(0, 4 - dirsOf(i).length), Math.floor(left / 2));
+        a.lpDirs = MOLECULES.lonePairDirs(dirsOf(i), give);
         left -= 2 * give;
       });
-      st.atoms[0].lpDirs = [];
       if (step === 3) return st;
-      const clp = Math.max(0, Math.floor(left / 2));
-      st.atoms[0].lpDirs = centralDirs(m, clp);
+      st.atoms[0].lpDirs = centralDirs(m, Math.max(0, Math.floor(left / 2)));
       return st;
     }
-    function lpFor(a, n) { const d = Math.atan2(-a.y, -a.x); const t = d + Math.PI; return n === 3 ? [t - Math.PI / 2, t, t + Math.PI / 2] : n === 2 ? [t - Math.PI / 3, t + Math.PI / 3] : n === 1 ? [t] : []; }
     function centralDirs(m, n) {
       const base = MOLECULES.build(m, 0).atoms[0].lpDirs;
       if (n <= base.length) return base.slice(0, n);
@@ -2869,14 +3337,14 @@ App.register({
       // step-by-step builder
       U.clear(stepBox);
       if (m.c) {
-        const total = MOLECULES.totalValence(m), B = m.L.length;
+        const total = MOLECULES.totalValence(m), B = m.L.length + m.L.reduce((t, l) => t + (l[2] || 0), 0);
         const segS = U.seg({ options: [1, 2, 3, 4, 5].map(k => ({ value: k, label: 'Step ' + k })), value: step, onChange: v => { step = v; update(); } });
-        const term = m.L.filter(l => l[0] !== 'H').length;
-        const after3 = total - 2 * B - 6 * term;
+        const outer = m.L.reduce((t, l) => t + (l[0] === 'H' ? 0 : 2 * (3 - (l[2] || 0))), 0);
+        const after3 = total - 2 * B - outer;
         const texts = {
           1: `<b>Count valence electrons.</b> ${countText(m)} = <b>${total}</b> electrons to place.`,
           2: `<b>Connect with single bonds.</b> ${m.c} is the central atom (least electronegative, not H). ${B} bonds use ${2 * B} electrons → ${total - 2 * B} left.`,
-          3: `<b>Complete octets on terminal atoms.</b> ${term ? `Each of the ${term} non-hydrogen terminal atoms gets 3 lone pairs (${6 * term} e⁻). ` : 'Hydrogen only needs 2 electrons. '}${Math.max(0, after3)} electrons left.`,
+          3: `<b>Complete octets on the outer atoms.</b> ${outer ? `Lone pairs go on the outer atoms until each has 8 electrons (${outer} e⁻ used). ` : 'Hydrogen only needs 2 electrons. '}${Math.max(0, after3)} electrons left.`,
           4: `<b>Put leftover electrons on the central atom.</b> ${after3 > 0 ? `${after3} electrons → ${after3 / 2} lone pair${after3 / 2 > 1 ? 's' : ''} on ${m.c}.` : 'No electrons left over.'}`,
           5: finalText(m),
         };
@@ -2899,6 +3367,8 @@ App.register({
           h('dt', null, 'Molecular geometry'), h('dd', null, V.shape),
           h('dt', null, 'Hybridization'), h('dd', null, V.hyb)),
           h('a', { class: 'btn sm', href: '#vsepr', onclick: () => U.store.set('vseprId', m.id) }, 'View in 3D →')));
+      } else if (m.atom) {
+        infoBox.appendChild(U.callout(`This is a <b>Lewis dot symbol</b>: ${MOLECULES.totalValence(m)} valence electron${MOLECULES.totalValence(m) === 1 ? '' : 's'} drawn around the symbol. Single dots fill the four sides first, then pair up.`));
       } else {
         const centers = s.atoms.map((a, i) => ({ a, i })).filter(x => x.a.bondCount > 1);
         infoBox.appendChild(U.panel('Geometry at each central atom', U.table(['Atom', 'Domains', 'Shape', 'Hybrid.'], centers.map(x => {
@@ -2911,7 +3381,7 @@ App.register({
       cv.redraw();
     }
     function countText(m) {
-      const els = [m.c].concat(m.L.map(l => l[0]));
+      const els = [m.c].concat(m.L.flatMap(l => [l[0]].concat(Array(l[2] || 0).fill('H'))));
       const cnt = {}; els.forEach(e => cnt[e] = (cnt[e] || 0) + 1);
       let s = Object.keys(cnt).map(e => `${cnt[e] > 1 ? cnt[e] + '×' : ''}${e} (${MOLECULES.val(e)})`).join(' + ');
       if (m.q) s += m.q < 0 ? ` + ${-m.q} (negative charge)` : ` − ${m.q} (positive charge)`;
@@ -2945,7 +3415,21 @@ const Mol3D = {
       atoms.push({ el: l.el, p: l.v.map(x => x * len), r: l.el === 'H' ? 0.2 : 0.29 });
       bonds.push({ a: 0, b: i + 1, order: l.order });
     });
-    return { atoms, bonds, lps: d.lps.map(v => ({ from: 0, v })), m };
+    // hydrogens on outer atoms (e.g. the O–H groups of H2SO4), tilted ~109° from the bond
+    const nrm = v => { const l = Math.hypot(...v) || 1; return v.map(x => x / l); };
+    const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    d.ligands.forEach((l, i) => {
+      const nH = (m.L[i] && m.L[i][2]) || 0;
+      if (!nH) return;
+      const u = nrm(l.v), p = nrm(cross(u, Math.abs(u[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0])), q = cross(u, p), base = atoms[i + 1].p;
+      for (let k = 0; k < nH; k++) {
+        const ph = k * 2 * Math.PI / 3, dir = [0, 1, 2].map(j => 0.334 * u[j] + 0.943 * (Math.cos(ph) * p[j] + Math.sin(ph) * q[j]));
+        atoms.push({ el: 'H', p: base.map((x, j) => x + dir[j] * 0.82), r: 0.2 });
+        bonds.push({ a: i + 1, b: atoms.length - 1, order: 1 });
+      }
+    });
+    const radius = Math.max(...atoms.map(a => Math.hypot(...a.p) + a.r));
+    return { atoms, bonds, lps: d.lps.map(v => ({ from: 0, v })), m, radius };
   },
   rotate(p, rot) {
     const [x, y, z] = p, cy = Math.cos(rot.yaw), sy = Math.sin(rot.yaw), cx = Math.cos(rot.pitch), sx = Math.sin(rot.pitch);
@@ -2955,7 +3439,7 @@ const Mol3D = {
   },
   draw(c, w, H, model, rot, o = {}) {
     const t = U.theme();
-    const S = (o.scale || Math.min(w, H) * 0.3), cx = w / 2, cy = H / 2 + (o.dy || 0), f = 6;
+    const S = (o.scale || Math.min(w, H) * 0.3) / Math.max(1, (model.radius || 1.4) / 1.4), cx = w / 2, cy = H / 2 + (o.dy || 0), f = 6;
     const proj = p => { const q = Mol3D.rotate(p, rot); const s = f / (f - q[2]); return { x: cx + q[0] * S * s, y: cy - q[1] * S * s, z: q[2], s }; };
     const items = [];
     const P = model.atoms.map(a => proj(a.p));
@@ -3017,7 +3501,7 @@ const Mol3D = {
     }
   },
   smallestPair(model) {
-    const vs = model.bonds.map(b => { const p = model.atoms[b.b].p; const n = Math.hypot(...p); return p.map(x => x / n); });
+    const vs = model.bonds.filter(b => b.a === 0).map(b => { const p = model.atoms[b.b].p; const n = Math.hypot(...p); return p.map(x => x / n); });
     let best = null;
     for (let i = 0; i < vs.length; i++) for (let j = i + 1; j < vs.length; j++) {
       const ang = Math.acos(U.clamp(vs[i][0] * vs[j][0] + vs[i][1] * vs[j][1] + vs[i][2] * vs[j][2], -1, 1));
@@ -3062,7 +3546,7 @@ const Mol3D = {
 
 App.register({
   id: 'vsepr', unit: 2, sym: 'Vs', title: 'VSEPR & 3D Molecular Shapes',
-  desc: 'Rotate molecules in 3D to see electron domains, lone pairs, bond angles, hybridization and polarity.',
+  desc: 'Rotate molecules in 3D to see electron domains, lone pairs, bond angles, hybridization and polarity. Type any formula to build your own.',
   tags: ['vsepr', 'molecular geometry', 'electron domain', 'hybridization', 'sp3', 'sp2', 'bond angle', 'polarity', 'dipole', 'sigma', 'pi', 'tetrahedral', 'trigonal', 'octahedral', '3d'],
   keyIdeas: [
     'Electron domains (bonds of any order and lone pairs) spread out as far apart as possible to minimize repulsion.',
@@ -3080,11 +3564,13 @@ App.register({
     ], scope, { key: 'vsepr' });
 
     function viewer(b, s) {
+      BUILDER.restore();
       let id = U.store.get('vseprId', 'nh3');
-      if (!MOLECULES.byId[id] || !MOLECULES.byId[id].c) id = 'nh3';
+      if (!MOLECULES.byId[id] || MOLECULES.byId[id].atom) id = 'nh3';
       let rot = { yaw: 0.5, pitch: 0.3 }, auto = true, lp = true, angle = true, dip = true, dragging = false, last = null;
       const groups = {};
       MOLECULES.single.forEach(m => { const V = MOLECULES.vsepr(m.L.length, m.lp); const k = `${V.steric} domains`; (groups[k] = groups[k] || []).push({ value: m.id, label: `${U.chemText(m.f)} — ${V.shape}` }); });
+      MOLECULES.multi.forEach(m => { if (BUILDER.embed(m).ring) return; (groups['Several central atoms'] = groups['Several central atoms'] || []).push({ value: m.id, label: `${U.chemText(m.f)} — ${m.name}` }); });
       const sel = U.select({ label: 'Molecule', options: Object.keys(groups).map(g => ({ group: g, options: groups[g] })), value: id, onChange: v => { id = v; U.store.set('vseprId', id); update(); } });
       const toggles = h('div', { class: 'row' },
         U.check({ label: 'Spin', checked: true, onChange: v => auto = v }).el,
@@ -3098,22 +3584,44 @@ App.register({
       b.append(h('div', { class: 'grid-viz' },
         U.panel(null, h('div', { class: 'flex-between' }, h('h3', { id: 'vsTitle' }), toggles), cv.wrap,
           U.legend([[U.theme().purple, 'lone pair (electron domain)'], [U.theme().orange, 'bond angle'], [U.theme().red, 'net dipole (→ δ−)']])),
-        h('div', { class: 'stack' }, U.panel('Choose', sel.el), info, U.panel('Lewis structure', lewis.wrap))));
+        h('div', { class: 'stack' }, U.panel('Choose', sel.el), BUILDER.moleculePanel(spec => { id = spec.id; U.store.set('vseprId', id); syncCustom(); update(); }).el, info, U.panel('Lewis structure', lewis.wrap))));
+      function syncCustom() {
+        const old = sel.input.querySelector('optgroup[data-custom]');
+        if (old) old.remove();
+        const cm = MOLECULES.byId.custom;
+        if (cm) { const g = h('optgroup', { label: 'Your molecule', 'data-custom': '1' }, h('option', { value: 'custom' }, U.chemText(cm.f) + ' — ' + cm.name)); sel.input.insertBefore(g, sel.input.firstChild); }
+        sel.set(id);
+      }
+      syncCustom();
       let model, dipVec, m;
       s.loop(dt => {
         if (auto && !dragging) rot.yaw += dt * 0.6;
         const c = cv.ctx;
         c.clearRect(0, 0, cv.w, cv.h);
-        Mol3D.draw(c, cv.w, cv.h, model, rot, { lonePairs: lp, angle, angleText: m.ang && m.lp ? m.ang : null, dipole: dip, dipoleVec: dipVec, scale: Math.min(cv.w, cv.h) * 0.3 });
+        if (!model) { U.text(c, m && m.atom ? 'A single atom has no shape' : 'No 3D model for rings', cv.w / 2, cv.h / 2, { align: 'center', color: U.theme().ink3, size: 14 }); return; }
+        Mol3D.draw(c, cv.w, cv.h, model, rot, { lonePairs: lp, angle: angle && !model.multi, angleText: m.ang && m.lp ? m.ang : null, dipole: dip, dipoleVec: dipVec, scale: Math.min(cv.w, cv.h) * 0.3 });
       });
       function update() {
         m = MOLECULES.byId[id];
-        model = Mol3D.fromMolecule(m);
-        dipVec = Mol3D.dipole(m);
         lewis.redraw();
-        const V = MOLECULES.vsepr(m.L.length, m.lp), pol = MOLECULES.polarity(m), bc = MOLECULES.bondCounts(m);
         document.getElementById('vsTitle').innerHTML = U.chem(m.f) + ' <span class="muted small" style="font-weight:500">' + m.name + '</span>';
         U.clear(info);
+        model = null; dipVec = null;
+        if (m.atom) { info.appendChild(U.callout('A single atom or monatomic ion has no bonds, so it has no molecular shape. Try a molecule such as PF5 or CH3OH.', 'warn')); return; }
+        if (!m.c) {
+          const g = BUILDER.embed(m), st = MOLECULES.build(m), bc = MOLECULES.bondCounts(m);
+          if (g.ring) info.appendChild(U.callout('3D view isn’t available for ring molecules, but the geometry at each atom still applies.', 'warn'));
+          else { model = g; dipVec = g.dipole; }
+          const hc = st.atoms.every(a => a.el === 'C' || a.el === 'H');
+          const centers = st.atoms.map((a, i) => ({ a, i })).filter(x => x.a.bondCount > 1);
+          info.appendChild(U.panel('Geometry at each central atom', U.table(['Atom', 'Domains', 'Shape', 'Hybrid.'], centers.map(x => { const V = MOLECULES.vsepr(x.a.bondCount, x.a.lp); return [x.a.el + (x.i + 1), V.steric, V.shape, V.hyb]; })),
+            h('dl', { class: 'kv' }, h('dt', null, 'σ / π bonds'), h('dd', null, `${bc.sigma} σ, ${bc.pi} π`), h('dt', null, 'Polarity'), h('dd', null, m.q ? 'ion (charged)' : g.ring ? (hc ? 'nonpolar' : 'polar') : g.polar ? 'polar' : 'nonpolar'))));
+          info.appendChild(U.callout(hc ? 'Hydrocarbons are nonpolar: C–H bonds are only slightly polar and their dipoles nearly cancel.' : 'Each central atom has its own VSEPR geometry. The 3D model joins them, assuming free rotation around single bonds. Numbers in the table match atom order.'));
+          return;
+        }
+        model = Mol3D.fromMolecule(m);
+        dipVec = Mol3D.dipole(m);
+        const V = MOLECULES.vsepr(m.L.length, m.lp), pol = MOLECULES.polarity(m), bc = MOLECULES.bondCounts(m);
         const kv = h('dl', { class: 'kv' });
         const add = (k, v) => kv.append(h('dt', null, k), h('dd', { html: String(v) }));
         add('Notation', `AX<sub>${m.L.length}</sub>${m.lp ? 'E<sub>' + m.lp + '</sub>' : ''}`);
@@ -3179,12 +3687,34 @@ const SUBSTANCES = (() => {
   });
   const byId = Object.fromEntries(list.map(s => [s.id, s]));
   const imfs = s => ['LDF'].concat(s.polar ? ['Dipole–dipole'] : []).concat(s.hb ? ['Hydrogen bonding'] : []);
-  return { list, byId, imfs };
+  const ckey = c => Object.keys(c).sort().map(k => k + c[k]).join('');
+  /** turn typed text into a substance (measured data if we have it, otherwise estimated) */
+  function fromText(text) {
+    const r = BUILDER.fromText(text);
+    if (r.error) return { error: r.error };
+    const spec = r.spec;
+    if (spec.q) return { error: 'Enter a neutral molecule. Ions in solution are held by ion–dipole forces, which this comparison does not model.' };
+    if (spec.atom && !['He', 'Ne', 'Ar', 'Kr', 'Xe', 'Rn'].includes(spec.struct.atoms[0].el)) return { error: 'A lone atom of that element is not a stable substance. Try a molecule such as Cl2 or CH3OH.' };
+    const P = BUILDER.properties(spec);
+    const counts = {};
+    MOLECULES.build(spec).atoms.forEach(a => { counts[a.el] = (counts[a.el] || 0) + 1; });
+    const body = text.replace(/\s+/g, '').replace(/[=#≡]/g, '');
+    const id = 'my:' + body;
+    if (byId[id]) return { sub: byId[id], known: false, P };
+    const known = list.find(x => !x.est && x.f === body) || list.find(x => !x.est && ckey(U.parseFormula(x.f)) === ckey(counts) && x.polar === P.polar && x.hb === P.hb);
+    if (known) return { sub: known, known: true, P };
+    const sub = { f: spec.f.replace(/\^.*/, ''), name: spec.custom ? body : spec.name, bp: P.bp, mp: Math.min(P.mp, P.bp - 10), polar: P.polar, hb: P.hb, M: P.M, e: P.e, id, est: true };
+    if (!byId[id]) list.push(sub);
+    byId[id] = sub;
+    return { sub, known: false, P };
+  }
+  const describe = (r) => `${r.known ? `Using measured data for <b>${r.sub.name}</b>.` : `Added <b>${U.chem(r.sub.f)}</b>: ${r.sub.e} electrons, ${r.sub.polar ? 'polar' : 'nonpolar'}${r.sub.hb ? ', hydrogen bonding' : ''}. Boiling point estimated at about ${r.sub.bp} °C (±40 °C) from its electron count, polarity and hydrogen bonding.`}`;
+  return { list, byId, imfs, fromText, describe };
 })();
 
 App.register({
   id: 'imf', unit: 3, sym: 'If', title: 'Intermolecular Forces',
-  desc: 'See London dispersion, dipole–dipole, hydrogen bonding and ion–dipole forces in action, and explain boiling points.',
+  desc: 'See London dispersion, dipole–dipole, hydrogen bonding and ion–dipole forces in action, explain boiling points, and test your own molecules.',
   tags: ['imf', 'london dispersion', 'ldf', 'dipole-dipole', 'hydrogen bonding', 'h-bond', 'ion-dipole', 'boiling point', 'polarizability', 'vapor pressure', 'intermolecular'],
   keyIdeas: [
     '<b>London dispersion forces (LDF)</b> exist between all molecules. They grow with the number of electrons (polarizability) and with surface contact (straight chains &gt; branched).',
@@ -3315,8 +3845,15 @@ App.register({
       const quick = h('div', { class: 'row' }, U.btn('Set to 25 °C', () => { Tc = 25; tS.set(25); info(); }, 'sm'), U.btn('Just below bp', () => { Tc = sub.bp - 15; tS.set(Tc); info(); }, 'sm'), U.btn('Just above bp', () => { Tc = sub.bp + 25; tS.set(Tc); info(); }, 'sm'));
       const box = h('div', { class: 'stack' });
       const cv = U.canvas(null, { aspect: 1.55, scope: s });
+      const own = BUILDER.entry({ title: 'Simulate your own molecule', label: 'Formula', placeholder: 'e.g. CH3CH2CH2OH', examples: ['CH3CH2CH2OH', 'CH3OCH3', 'CCl4', 'C8H18', 'HCN', 'CH3CN'], button: 'Simulate', hint: 'Type a molecular or condensed formula. Measured data are used when we have them; otherwise the boiling point is estimated.', onSubmit: text => {
+        const r = SUBSTANCES.fromText(text);
+        if (r.error) return { ok: false, msg: r.error };
+        if (!sel.input.querySelector(`option[value="${CSS.escape(r.sub.id)}"]`)) sel.input.appendChild(h('option', { value: r.sub.id }, `${U.chemText(r.sub.f)} — yours (bp ≈ ${r.sub.bp} °C)`));
+        sub = r.sub; sel.set(sub.id); U.store.set('imfSim', sub.id); reset(); info();
+        return { ok: true, msg: SUBSTANCES.describe(r) };
+      } });
       b.append(h('div', { class: 'grid-viz' }, U.panel(null, cv.wrap, U.legend([[U.theme().blue, 'hydrogen bond'], [U.theme().good, 'dipole–dipole'], [U.theme().ink3, 'London dispersion']])),
-        h('div', { class: 'stack' }, U.panel('Settings', sel.el, tS.el, quick), box)));
+        h('div', { class: 'stack' }, U.panel('Settings', sel.el, tS.el, quick), own.el, box)));
       // 2-D Lennard-Jones particles in reduced units (sigma = 1)
       const N = 42, BW = 22, BH = 14;
       let P = [];
@@ -3382,7 +3919,7 @@ App.register({
         U.clear(box);
         const state = Tc < sub.mp ? 'solid' : Tc < sub.bp ? 'liquid' : 'gas';
         const stats = U.stats([['bp', 'Boiling point'], ['mp', 'Melting point'], ['st', 'State at this T'], ['e', 'Electrons']]);
-        stats.set('bp', sub.bp + ' °C'); stats.set('mp', sub.mp + ' °C'); stats.set('st', state); stats.set('e', sub.e);
+        stats.set('bp', (sub.est ? '≈' : '') + sub.bp + ' °C'); stats.set('mp', (sub.est ? '≈' : '') + sub.mp + ' °C'); stats.set('st', state); stats.set('e', sub.e);
         box.append(stats.el,
           U.panel('Forces present', h('div', { class: 'row' }, ['LDF', 'Dipole–dipole', 'Hydrogen bonding'].map(n => h('span', { class: 'chip' + (SUBSTANCES.imfs(sub).includes(n) ? '' : ' off') }, n)))),
           U.callout(state === 'gas' ? `Above ${sub.bp} °C the molecules have enough kinetic energy to overcome their intermolecular attractions, so they spread out as a gas.` : `Below its boiling point the attractions win: molecules stay close together and the dashed lines show the IMFs holding them.`));
@@ -3403,10 +3940,17 @@ App.register({
       const cards = h('div', { class: 'grid2' });
       const verdict = h('div');
       const cv = U.canvas(null, { height: 150, scope: s, draw });
-      b.append(U.panel('Pick two substances', h('div', { class: 'controls' }, sA.el, sB.el), h('div', { class: 'small muted' }, 'Classic AP comparisons:'), pick), cards, U.panel('Boiling points', cv.wrap), verdict);
+      const own = BUILDER.entry({ title: 'Compare your own molecule', label: 'Formula (goes into Substance B)', placeholder: 'e.g. CH3CH2CH2OH', examples: ['CH3CH2CH2OH', 'CH3CH2OCH3', 'C6H14', 'CH3COCH3', 'CHF3'], button: 'Compare', onSubmit: text => {
+        const r = SUBSTANCES.fromText(text);
+        if (r.error) return { ok: false, msg: r.error };
+        [sA, sB].forEach(x => { if (!x.input.querySelector(`option[value="${CSS.escape(r.sub.id)}"]`)) x.input.appendChild(h('option', { value: r.sub.id }, `${U.chemText(r.sub.f)} — yours`)); });
+        B = r.sub.id; sB.set(B); U.store.set('imfB', B); upd();
+        return { ok: true, msg: SUBSTANCES.describe(r) };
+      } });
+      b.append(U.panel('Pick two substances', h('div', { class: 'controls' }, sA.el, sB.el), h('div', { class: 'small muted' }, 'Classic AP comparisons:'), pick), own.el, cards, U.panel('Boiling points', cv.wrap), verdict);
       function card(x) {
         return U.panel(null, h('div', { class: 'flex-between' }, h('h2', { html: U.chem(x.f) }), h('span', { class: 'muted small' }, x.name)),
-          h('dl', { class: 'kv' }, ...[['Molar mass', x.M.toFixed(1) + ' g/mol'], ['Electrons', x.e], ['Polarity', x.polar ? 'polar' : 'nonpolar'], ['Boiling point', x.bp + ' °C']].flatMap(([k, v]) => [h('dt', null, k), h('dd', null, String(v))])),
+          h('dl', { class: 'kv' }, ...[['Molar mass', x.M.toFixed(1) + ' g/mol'], ['Electrons', x.e], ['Polarity', x.polar ? 'polar' : 'nonpolar'], ['Boiling point', (x.est ? '≈' : '') + x.bp + ' °C' + (x.est ? ' (estimated)' : '')]].flatMap(([k, v]) => [h('dt', null, k), h('dd', null, String(v))])),
           h('div', { class: 'row' }, ['LDF', 'Dipole–dipole', 'Hydrogen bonding'].map(n => h('span', { class: 'chip' + (SUBSTANCES.imfs(x).includes(n) ? '' : ' off') }, n))));
       }
       function draw(c, w, H) {
@@ -3799,7 +4343,16 @@ App.register({
       const rows = h('div', { class: 'stack' });
       const cv = U.canvas(null, { aspect: 1.7, scope: s, draw });
       const tbl = h('div');
-      b.append(h('div', { class: 'grid-viz' }, U.panel(null, cv.wrap, tbl), h('div', { class: 'stack' }, U.panel('Curves', rows))));
+      const own = BUILDER.entry({ title: 'Add any gas', label: 'Formula', placeholder: 'e.g. SF6', examples: ['SF6', 'CH4', 'Cl2', 'C3H8', 'UF6'], button: 'Add', onSubmit: text => {
+        const k = text.replace(/\s+/g, '');
+        let M;
+        try { M = U.molarMass(k); } catch (e) { return { ok: false, msg: e.message + '.' }; }
+        GASES[k] = +M.toFixed(2);
+        curves[2] = { g: k, T: curves[2].T };
+        controls(); upd();
+        return { ok: true, msg: `${U.chem(k)} (M = ${M.toFixed(2)} g/mol) is now curve 3. Its RMS speed at ${curves[2].T} K is ${Math.sqrt(3 * K.R * curves[2].T / (M / 1000)).toFixed(0)} m/s.` };
+      } });
+      b.append(h('div', { class: 'grid-viz' }, U.panel(null, cv.wrap, tbl), h('div', { class: 'stack' }, U.panel('Curves', rows), own.el)));
       function controls() {
         U.clear(rows);
         const cols = ccols();
@@ -4383,7 +4936,29 @@ const CHEM = (() => {
     rest.forEach((e, i) => { const a = start + i * 2 * Math.PI / n * (n === 2 && s.formula !== 'CO2' ? 0.29 : 1); const r = e === 'H' ? R * 0.65 : R * 0.9; U.drawAtom(c, x + Math.cos(a) * ring, y + Math.sin(a) * ring, r, e, { label: false }); });
     U.drawAtom(c, x, y, R, center, { label: false });
   }
-  return { parseSpecies, parseEquation, balance, balanceSigned, oxStates, fmtOx, spHTML, eqHTML, glyph, isMetal, nullspace };
+  /* split an ionic formula (NaCl, Ca3(PO4)2, (NH4)2SO4) into cation and anion with charges */
+  const POLY = { NH4: 1, NO3: -1, NO2: -1, OH: -1, CN: -1, SCN: -1, MnO4: -1, CH3COO: -1, HCO3: -1, HSO4: -1, H2PO4: -1, ClO: -1, ClO2: -1, ClO3: -1, ClO4: -1, BrO3: -1, IO3: -1, HS: -1, CO3: -2, SO4: -2, SO3: -2, S2O3: -2, CrO4: -2, Cr2O7: -2, C2O4: -2, HPO4: -2, PO4: -3, AsO4: -3 };
+  const MONO_AN = { F: -1, Cl: -1, Br: -1, I: -1, O: -2, S: -2, Se: -2, N: -3, P: -3 };
+  function ionic(raw) {
+    const s = String(raw).replace(/\s+/g, '').replace(/\((s|aq|l|g)\)$/i, '');
+    let m, cat, nc, rest;
+    if ((m = s.match(/^\(NH4\)(\d+)(.+)$/))) { cat = 'NH4'; nc = +m[1]; rest = m[2]; }
+    else if ((m = s.match(/^NH4(.+)$/))) { cat = 'NH4'; nc = 1; rest = m[1]; }
+    else if ((m = s.match(/^([A-Z][a-z]?)(\d*)(.+)$/))) { cat = m[1]; nc = m[2] ? +m[2] : 1; rest = m[3]; if (!ELEMENTS.bySym[cat] || !isMetal(cat)) return null; }
+    else return null;
+    let an, na;
+    const known = x => POLY[x] != null || MONO_AN[x] != null;
+    if ((m = rest.match(/^\(([^)]+)\)(\d+)$/))) { an = m[1]; na = +m[2]; }
+    else if (known(rest)) { an = rest; na = 1; }
+    else if ((m = rest.match(/^(.*?)(\d+)$/)) && known(m[1])) { an = m[1]; na = +m[2]; }
+    else return null;
+    const qa = POLY[an] != null ? POLY[an] : MONO_AN[an];
+    if (qa == null || qa >= 0) return null;
+    const qc = -qa * na / nc;
+    if (!Number.isInteger(qc) || qc < 1 || qc > 4) return null;
+    return { cat, nc, qc, an, na, qa };
+  }
+  return { parseSpecies, parseEquation, balance, balanceSigned, oxStates, fmtOx, spHTML, eqHTML, glyph, isMetal, nullspace, ionic, POLY };
 })();
 
 App.register({
@@ -4517,7 +5092,7 @@ App.register({
     const COLORS = { Ag: '#b8bcc6', Pb: '#5c6070', Ba: '#3faf7a', Ca: '#4caf6a', Cu: '#3d8be0', Fe: '#d0702e', Na: '#9a62f0', K: '#8c4fd0', NH4: '#3d6ae0', Mg: '#46c486', Zn: '#7f84b4', NO3: '#e5413b', Cl: '#33b34f', I: '#7b4ac8', Br: '#a8402e', SO4: '#ecc53a', CO3: '#50565f', OH: '#e88aa0', PO4: '#f08a24', CrO4: '#e6b800', S: '#d4a20a' };
     const PPT_COLOR = { AgCl: '#f2f2f2', AgI: '#f0e68c', AgBr: '#f5f0c8', PbI2: '#f5d000', PbCl2: '#f2f2f2', BaSO4: '#f7f7f7', Ag2CrO4: '#b5352b', PbCrO4: '#f2c200', 'Cu(OH)2': '#5aa7e0', 'Fe(OH)3': '#a0522d', CuS: '#222', PbS: '#222', Ag2S: '#222', ZnS: '#f2f2f2' };
     const soluble = (c, a) => {
-      if (['Na', 'K', 'NH4'].includes(c) || a === 'NO3') return [true, `${c === 'NH4' ? 'NH₄⁺' : c === 'NO3' ? '' : c + '⁺'} and nitrate compounds are always soluble`];
+      if (['Li', 'Na', 'K', 'Rb', 'Cs', 'NH4'].includes(c) || ['NO3', 'CH3COO', 'ClO4', 'ClO3'].includes(a)) return [true, 'compounds of group 1 metals, NH₄⁺, nitrate, acetate and perchlorate are always soluble'];
       if (['Cl', 'Br', 'I'].includes(a)) return ['Ag', 'Pb'].includes(c) ? [false, 'halides of Ag⁺ and Pb²⁺ are insoluble'] : [true, 'most chlorides, bromides and iodides are soluble'];
       if (a === 'SO4') return ['Ba', 'Pb', 'Ca', 'Ag'].includes(c) ? [false, 'sulfates of Ba²⁺, Pb²⁺, Ca²⁺ and Ag⁺ are insoluble'] : [true, 'most sulfates are soluble'];
       if (a === 'OH') return c === 'Ba' ? [true, 'Ba(OH)₂ is soluble'] : [false, 'most hydroxides are insoluble'];
@@ -4525,7 +5100,7 @@ App.register({
     };
     const formula = (c, a) => {
       const qc = CAT[c][1], qa = -AN[a][1], g = U.gcd(qc, qa), nc = qa / g, na = qc / g;
-      const poly = x => x.length > 2 || /\d/.test(x) || x === 'OH';
+      const poly = x => x.length > 2 || /\d/.test(x) || ['OH', 'CN', 'HS'].includes(x);
       const part = (x, n) => n > 1 ? (poly(x) ? `(${x})${n}` : x + n) : x;
       return { f: part(c, nc) + part(a, na), nc, na };
     };
@@ -4539,7 +5114,23 @@ App.register({
     const out = h('div', { class: 'stack' });
     const cv = U.canvas(null, { aspect: 1.8, scope });
     el.append(h('div', { class: 'grid-viz' }, U.panel(null, cv.wrap, h('div', { class: 'row' }, pourBtn, U.btn('Reset', () => reset(), ''))), h('div', { class: 'stack' }, U.panel('Choose two aqueous solutions', selA.el, selB.el, h('div', { class: 'row' }, ['AgNO3 + NaCl', 'Pb(NO3)2 + KI', 'BaCl2 + Na2SO4', 'CuSO4 + NaOH', 'NaCl + KBr'].map((t2, i) => U.btn(U.chem(t2), () => { const P = [[0, 8], [1, 9], [2, 10], [4, 12], [8, 16]][i]; s1 = P[0]; s2 = P[1]; selA.set(s1); selB.set(s2); reset(); }, 'sm')))))));
-    el.appendChild(out);
+    const own = BUILDER.entry({ title: 'Add your own solution', label: 'Formula of a soluble ionic compound', placeholder: 'e.g. Ba(NO3)2', examples: ['Ba(NO3)2', 'Na3PO4', 'CuCl2', 'K2CO3', 'Sr(NO3)2', 'Li2SO4'], button: 'Add as Solution 2', onSubmit: text => {
+      const f = text.replace(/\s+/g, '');
+      const io = CHEM.ionic(f);
+      if (!io) return { ok: false, msg: `Could not split “${U.esc(f)}” into a metal (or NH₄⁺) cation and a known anion.` };
+      if (CAT[io.cat] && CAT[io.cat][1] !== io.qc) return { ok: false, msg: `This tool already uses ${io.cat} as ${io.cat}${U.supText((CAT[io.cat][1] > 1 ? CAT[io.cat][1] : '') + '+')}; one charge per metal is supported.` };
+      if (AN[io.an] && AN[io.an][1] !== io.qa) return { ok: false, msg: 'That anion’s charge conflicts with one already in use.' };
+      CAT[io.cat] = [io.cat, io.qc]; AN[io.an] = [io.an, io.qa];
+      const pal = ['#d4a20a', '#13a3a0', '#d44690', '#6b7785', '#8650d6', '#e8781c'];
+      [io.cat, io.an].forEach((x, i) => { if (!COLORS[x]) COLORS[x] = pal[(x.length * 7 + x.charCodeAt(0) + i) % pal.length]; });
+      const sol = soluble(io.cat, io.an);
+      if (!sol[0]) return { ok: false, msg: `${U.chem(f)} is not soluble in water (${sol[1]}), so it can’t be a starting solution. Try mixing solutions that would form it instead.` };
+      let k = SALTS.findIndex(p => p[0] === io.cat && p[1] === io.an);
+      if (k < 0) { SALTS.push([io.cat, io.an]); k = SALTS.length - 1; [selA, selB].forEach(sx => sx.input.appendChild(h('option', { value: k }, label([io.cat, io.an]) + '(aq)'))); }
+      s2 = k; selB.set(k); reset();
+      return { ok: true, msg: `Added ${U.chem(formula(io.cat, io.an).f)}(aq), which dissolves into ${ionHTML(io.cat, io.qc)} and ${ionHTML(io.an, io.qa)} ions. It is now Solution 2: press Pour together.` };
+    } });
+    el.append(own.el, out);
 
     let parts = [];
     function analyze() {
@@ -4668,7 +5259,22 @@ App.register({
     const pOut = h('div', { class: 'stack' });
     const gOut = h('div', { class: 'stack' });
     const cv = U.canvas(null, { aspect: 2.1, scope });
-    el.append(h('div', { class: 'grid-viz' }, U.panel('Particle view', cv.wrap, h('div', { class: 'row' }, go)), h('div', { class: 'stack' }, U.panel('Set up', sel.el, sA.el, sB.el), pOut)), gOut);
+    const own = BUILDER.entry({ title: 'Use your own reaction', label: 'Equation with two reactants (coefficients optional)', placeholder: 'e.g. C2H6 + O2 -> CO2 + H2O', examples: ['C2H6 + O2 -> CO2 + H2O', 'NO + O2 -> NO2', 'C3H8 + O2 -> CO2 + H2O', 'CH4 + Cl2 -> CH3Cl + HCl'], button: 'Use', onSubmit: text => {
+      let R, P, co;
+      try { ({ R, P } = CHEM.parseEquation(text)); co = CHEM.balance(R, P); } catch (e) { return { ok: false, msg: e.message }; }
+      if (R.length !== 2) return { ok: false, msg: 'The particle view needs exactly two reactants (A and B).' };
+      if (R.concat(P).some(x => x.charge || x.electron)) return { ok: false, msg: 'Use neutral substances (no ions) for this tool.' };
+      const side = (S, off) => S.map((x, i) => (co[off + i] > 1 ? co[off + i] : '') + x.formula).join(' + ');
+      const entry = { eq: side(R, 0) + ' -> ' + side(P, R.length), R: R.map((x, i) => [x.formula, co[i]]), P: P.map((x, i) => [x.formula, co[R.length + i]]), custom: true };
+      let k = RX.findIndex(r => r.custom);
+      if (k < 0) { RX.push(entry); k = RX.length - 1; sel.input.appendChild(h('option', { value: k })); } else RX[k] = entry;
+      sel.input.options[k].textContent = 'Yours: ' + U.chemText(entry.eq);
+      ri = k; sel.set(k);
+      nA = Math.min(12, entry.R[0][1] * 3); nB = Math.min(12, entry.R[1][1] * 2); sA.set(nA); sB.set(nB);
+      reacted = 0; actual = 0; refresh();
+      return { ok: true, msg: 'Balanced: ' + CHEM.eqHTML(R, P, co) + '. Adjust the molecule sliders and press React.' };
+    } });
+    el.append(h('div', { class: 'grid-viz' }, U.panel('Particle view', cv.wrap, h('div', { class: 'row' }, go)), h('div', { class: 'stack' }, U.panel('Set up', sel.el, sA.el, sB.el), own.el, pOut)), gOut);
     const sp = f => CHEM.parseSpecies(f);
     function calc() {
       const r = RX[ri], [a, b] = r.R;
@@ -5456,7 +6062,7 @@ App.register({
     const h = U.h;
     U.tabs(el, [{ label: 'Bond enthalpies', render: bonds }, { label: 'Enthalpy of formation', render: formation }, { label: 'Hess’s law puzzle', render: hess }], scope, { key: 'enthalpy' });
 
-    const BE = { 'H–H': 436, 'C–H': 413, 'C–C': 348, 'C=C': 614, 'C≡C': 839, 'O=O': 495, 'C=O (CO₂)': 799, 'C–O': 358, 'O–H': 463, 'N≡N': 941, 'N–H': 391, 'H–Cl': 431, 'Cl–Cl': 242, 'C–Cl': 328, 'H–F': 567, 'F–F': 159 };
+    const BE = { 'H–H': 436, 'C–H': 413, 'C–C': 348, 'C=C': 614, 'C≡C': 839, 'O=O': 495, 'C=O (CO₂)': 799, 'C–O': 358, 'O–H': 463, 'N≡N': 941, 'N–H': 391, 'H–Cl': 431, 'Cl–Cl': 242, 'C–Cl': 328, 'H–F': 567, 'F–F': 159, 'C=O': 745, 'C≡O': 1072, 'O–O': 146, 'N–N': 163, 'N=N': 418, 'C–N': 293, 'C=N': 615, 'C≡N': 891, 'N–O': 201, 'N=O': 607, 'H–Br': 366, 'H–I': 299, 'Br–Br': 193, 'I–I': 151, 'C–F': 485, 'C–Br': 276, 'C–I': 240, 'S–H': 339, 'C–S': 259, 'S=O': 523, 'S–O': 265, 'O–F': 190, 'N–F': 272, 'N–Cl': 200, 'O–Cl': 203, 'S–Cl': 253, 'F–Cl': 253, 'P–H': 322, 'P–Cl': 326, 'Si–H': 323, 'Si–O': 452, 'S–S': 266, 'C=S': 577 };
     function bonds(b, s) {
       const RX = [
         { eq: 'CH4 + 2O2 -> CO2 + 2H2O', broken: [['C–H', 4], ['O=O', 2]], formed: [['C=O (CO₂)', 2], ['O–H', 4]] },
@@ -5471,7 +6077,37 @@ App.register({
       const sel = U.select({ label: 'Reaction', options: RX.map((r, i) => ({ value: i, label: U.chemText(r.eq) })), value: ri, onChange: v => { ri = +v; upd(); } });
       const out = h('div', { class: 'stack' });
       const cv = U.canvas(null, { aspect: 1.25, scope: s, draw });
-      b.append(h('div', { class: 'grid-viz' }, U.panel('Energy ladder', cv.wrap), h('div', { class: 'stack' }, U.panel('Choose', sel.el), out, U.panel('Average bond enthalpies (kJ/mol)', U.table(['Bond', 'Energy'], Object.keys(BE).map(k => [k, BE[k]]), { num: [1] })))));
+      const PRI = { C: 0, Si: 1, N: 2, P: 3, S: 4, O: 5, H: 6, F: 7, Cl: 8, Br: 9, I: 10 };
+      const bkey = (x, y, o, co2) => co2 && o === 2 ? 'C=O (CO₂)' : ((PRI[x] ?? 20) <= (PRI[y] ?? 20) ? x + ['', '–', '=', '≡'][o] + y : y + ['', '–', '=', '≡'][o] + x);
+      const own = BUILDER.entry({ title: 'Estimate ΔH for your own reaction', label: 'Equation (neutral molecules; condensed formulas work)', placeholder: 'e.g. C2H6 + O2 -> CO2 + H2O', examples: ['C2H6 + O2 -> CO2 + H2O', 'CH2CH2 + Cl2 -> CH2ClCH2Cl', 'CH3OH + O2 -> CO2 + H2O', 'N2H4 + O2 -> N2 + H2O', 'H2 + Br2 -> HBr'], button: 'Calculate', onSubmit: text => {
+        let R, P, co;
+        try { ({ R, P } = CHEM.parseEquation(text)); co = CHEM.balance(R, P); } catch (e) { return { ok: false, msg: e.message }; }
+        if (R.concat(P).some(x => x.charge || x.electron)) return { ok: false, msg: 'Bond enthalpies apply to neutral molecules (gases), not ions.' };
+        const tally = (S, off) => {
+          const t = {};
+          S.forEach((sp, i) => {
+            const r = BUILDER.fromText(sp.formula);
+            if (r.error) throw new Error(U.chem(sp.formula) + ': ' + r.error);
+            if (r.spec.atom) throw new Error(`${U.chem(sp.formula)} is a single atom. Write elements as the molecules they form (O2, H2, Cl2).`);
+            const st = MOLECULES.build(r.spec);
+            st.bonds.forEach(bd => { const k = bkey(st.atoms[bd.a].el, st.atoms[bd.b].el, bd.order, sp.formula === 'CO2'); t[k] = (t[k] || 0) + co[off + i]; });
+          });
+          return t;
+        };
+        let br, fm;
+        try { br = tally(R, 0); fm = tally(P, R.length); } catch (e) { return { ok: false, msg: e.message }; }
+        const miss = [...new Set(Object.keys(br).concat(Object.keys(fm)).filter(k => BE[k] == null))];
+        if (miss.length) return { ok: false, msg: 'No average bond enthalpy is listed for: ' + miss.join(', ') + '.' };
+        const side = (S, off) => S.map((x, i) => (co[off + i] > 1 ? co[off + i] : '') + x.formula).join(' + ');
+        const entry = { eq: side(R, 0) + ' -> ' + side(P, R.length), broken: Object.entries(br), formed: Object.entries(fm), custom: true };
+        let k = RX.findIndex(r => r.custom);
+        if (k < 0) { RX.push(entry); k = RX.length - 1; sel.input.appendChild(h('option', { value: k })); } else RX[k] = entry;
+        sel.input.options[k].textContent = 'Yours: ' + U.chemText(entry.eq);
+        ri = k; sel.set(k); upd();
+        const dH = sum(entry.broken) - sum(entry.formed);
+        return { ok: true, msg: `Balanced: ${CHEM.eqHTML(R, P, co)}. Bonds were counted from each molecule’s Lewis structure. Estimated ΔH = <b>${dH > 0 ? '+' : ''}${dH} kJ</b>.` };
+      } });
+      b.append(h('div', { class: 'grid-viz' }, U.panel('Energy ladder', cv.wrap), h('div', { class: 'stack' }, U.panel('Choose', sel.el), own.el, out, U.panel('Average bond enthalpies (kJ/mol)', U.table(['Bond', 'Energy'], Object.keys(BE).map(k => [k, BE[k]]), { num: [1] })))));
       const sum = list => list.reduce((t, [k, n]) => t + BE[k] * n, 0);
       function draw(c, w, H) {
         const t = U.theme(), r = RX[ri], Bk = sum(r.broken), Fm = sum(r.formed), dH = Bk - Fm;
@@ -5949,7 +6585,21 @@ App.register({
       const out = h('div', { class: 'stack' });
       const cv = U.canvas(null, { aspect: 1.25, scope: s });
       const gr = U.canvas(null, { aspect: 1.8, scope: s, draw: graph });
-      b.append(h('div', { class: 'grid-viz' }, h('div', { class: 'stack' }, out, U.panel('Solubility vs. added common ion', gr.wrap)), h('div', { class: 'stack' }, U.panel('Choose', sel.el, ws.el, cs.el, ps.el), U.panel('Saturated solution', cv.wrap))));
+      const ionStr = (x, q) => x + '^' + (Math.abs(q) > 1 ? Math.abs(q) : '') + (q > 0 ? '+' : '-');
+      const own = BUILDER.entry({ title: 'Add your own salt', label: 'Formula and Ksp', placeholder: 'e.g. PbSO4 1.6e-8', examples: ['PbSO4 1.6e-8', 'Ag2CO3 8.5e-12', 'Zn(OH)2 3e-17', 'BaF2 1.0e-6'], button: 'Add', hint: 'Type the formula, a space, then K<sub>sp</sub> (1.6e-8 or 1.6x10^-8).', onSubmit: text => {
+        const parts = text.trim().split(/[\s,]+/);
+        const f = parts[0] || '', kt = parts.slice(1).join('').replace(/[×x*]10\^?/i, 'e').replace(/−/g, '-');
+        const io = CHEM.ionic(f);
+        if (!io) return { ok: false, msg: `Could not split “${U.esc(f)}” into a metal (or NH₄⁺) cation and a known anion.` };
+        const Ksp = parseFloat(kt);
+        if (!(Ksp > 0 && Ksp < 1)) return { ok: false, msg: 'Add a Ksp value after the formula, e.g. PbSO4 1.6e-8.' };
+        SALTS.push([f, ionStr(io.cat, io.qc), io.nc, ionStr(io.an, io.qa), io.na, Ksp]);
+        si = SALTS.length - 1;
+        sel.input.appendChild(h('option', { value: si }, `${U.chemText(f)}  (Ksp = ${U.sig(Ksp, 2)}) — yours`));
+        sel.set(si); common = 0; cs.set(0); upd();
+        return { ok: true, msg: `Added ${U.chem(f)}: K<sub>sp</sub> = [${U.chem(ionStr(io.cat, io.qc))}]${io.nc > 1 ? '<sup>' + io.nc + '</sup>' : ''}[${U.chem(ionStr(io.an, io.qa))}]${io.na > 1 ? '<sup>' + io.na + '</sup>' : ''}.` };
+      } });
+      b.append(h('div', { class: 'grid-viz' }, h('div', { class: 'stack' }, out, U.panel('Solubility vs. added common ion', gr.wrap)), h('div', { class: 'stack' }, U.panel('Choose', sel.el, ws.el, cs.el, ps.el), own.el, U.panel('Saturated solution', cv.wrap))));
       const solveS = (x, y, Ksp, cm, ca) => {
         const f = sv => Math.log(Math.pow(cm + x * sv, x) * Math.pow(ca + y * sv, y) + 1e-300) - Math.log(Ksp);
         return U.bisect(f, 0, 10, 200);
@@ -6102,6 +6752,7 @@ App.register({
       const SP = [
         ['HCl', 'acid', Infinity], ['HNO3', 'acid', Infinity], ['HF', 'acid', 6.8e-4], ['HNO2', 'acid', 4.5e-4], ['CH3COOH', 'acid', 1.8e-5], ['HClO', 'acid', 3.0e-8], ['HCN', 'acid', 6.2e-10], ['NH4^+', 'acid', 5.6e-10],
         ['NaOH', 'base', Infinity], ['CH3NH2', 'base', 4.4e-4], ['NH3', 'base', 1.8e-5], ['C5H5N', 'base', 1.7e-9],
+        ['HA', 'acid', 1e-5, 'yours'], ['B', 'base', 1e-5, 'yours'],
       ];
       let si = 4, C = 0.1;
       const sel = U.select({ label: 'Substance', options: [{ group: 'Acids', options: SP.map((x, i) => [x, i]).filter(([x]) => x[1] === 'acid').map(([x, i]) => ({ value: i, label: `${U.chemText(x[0])} ${x[2] === Infinity ? '(strong)' : '(Ka = ' + U.sig(x[2], 2) + ')'}` })) }, { group: 'Bases', options: SP.map((x, i) => [x, i]).filter(([x]) => x[1] === 'base').map(([x, i]) => ({ value: i, label: `${U.chemText(x[0])} ${x[2] === Infinity ? '(strong)' : '(Kb = ' + U.sig(x[2], 2) + ')'}` })) }], value: si, onChange: v => { si = +v; upd(); } });
@@ -6110,7 +6761,9 @@ App.register({
       const out = h('div');
       const cv = U.canvas(null, { aspect: 1.35, scope: s });
       const gr = U.canvas(null, { aspect: 1.9, scope: s, draw: graph });
-      b.append(h('div', { class: 'grid-viz' }, h('div', { class: 'stack' }, U.panel('Particle view (water molecules not shown)', cv.wrap), U.panel('Percent ionization vs. concentration', gr.wrap)), h('div', { class: 'stack' }, U.panel('Choose', sel.el, cs.el), stats.el, out)));
+      [...sel.input.options].forEach(o => { const x = SP[+o.value]; if (x && x[3]) o.textContent = x[1] === 'acid' ? 'Your own weak acid HA (set Ka below)' : 'Your own weak base B (set Kb below)'; });
+      const kS = U.logSlider({ label: 'K of your acid or base', min: 1e-12, max: 1, value: 1e-5, fmt: v => U.sig(v, 2), onInput: v => { SP.forEach(x => { if (x[3]) x[2] = v; }); upd(); } });
+      b.append(h('div', { class: 'grid-viz' }, h('div', { class: 'stack' }, U.panel('Particle view (water molecules not shown)', cv.wrap), U.panel('Percent ionization vs. concentration', gr.wrap)), h('div', { class: 'stack' }, U.panel('Choose', sel.el, kS.el, cs.el), stats.el, out)));
       const calc = (conc = C) => {
         const [f, type, K] = SP[si];
         if (type === 'acid') {
@@ -6146,6 +6799,8 @@ App.register({
       });
       function upd() {
         const [f, type, K] = SP[si], r = calc();
+        kS.el.hidden = !SP[si][3];
+        if (SP[si][3]) kS.el.querySelector('.lbl span').textContent = type === 'acid' ? 'Ka of your weak acid' : 'Kb of your weak base';
         stats.set('ph', r.pH.toFixed(2)); stats.set('pi', (r.frac * 100).toFixed(r.frac > 0.999 ? 0 : 2) + '%'); stats.set('eq', Math.round(16 * r.frac) + ' of 16 shown');
         U.clear(out);
         const F = U.chem(f);
@@ -6214,6 +6869,8 @@ App.register({
       { id: 'phos', name: 'Triprotic: phosphoric acid H₃PO₄', kind: 'acid', Ka: [7.5e-3, 6.2e-8, 4.8e-13], label: 'H₃PO₄', sp: ['H₃PO₄', 'H₂PO₄⁻', 'HPO₄²⁻', 'PO₄³⁻'] },
       { id: 'wb', name: 'Weak base: NH₃ (titrated with HCl)', kind: 'base', Kb: 1.8e-5, label: 'NH₃', sp: ['NH₄⁺', 'NH₃'] },
       { id: 'sb', name: 'Strong base: NaOH (titrated with HCl)', kind: 'sbase', label: 'NaOH' },
+      { id: 'cwa', name: 'Your own weak acid (set Ka below)', kind: 'acid', Ka: [1e-4], label: 'HA', sp: ['HA', 'A⁻'], custom: true },
+      { id: 'cwb', name: 'Your own weak base (set Kb below)', kind: 'base', Kb: 1e-4, label: 'B', sp: ['BH⁺', 'B'], custom: true },
     ];
     const INDICATORS = { none: null, 'Methyl orange': [3.1, 4.4, '#e0413b', '#e6b800'], 'Methyl red': [4.4, 6.2, '#e0413b', '#e6b800'], 'Bromothymol blue': [6.0, 7.6, '#e6b800', '#2f6fe0'], Phenolphthalein: [8.2, 10.0, 'rgba(255,255,255,0)', '#e04a9a'] };
     let ai = 1, Ca = 0.10, Va = 25, Ct = 0.10, Vt = 12.5, ind = 'Phenolphthalein', playing = false;
@@ -6221,6 +6878,7 @@ App.register({
     const s1 = U.slider({ label: 'Analyte concentration', min: 0.02, max: 0.5, step: 0.01, value: Ca, unit: 'M', fmt: v => v.toFixed(2), onInput: v => { Ca = v; upd(); } });
     const s2 = U.slider({ label: 'Analyte volume', min: 10, max: 50, step: 1, value: Va, unit: 'mL', onInput: v => { Va = v; upd(); } });
     const s3 = U.slider({ label: 'Titrant concentration', min: 0.02, max: 0.5, step: 0.01, value: Ct, unit: 'M', fmt: v => v.toFixed(2), onInput: v => { Ct = v; upd(); } });
+    const kS = U.logSlider({ label: 'K of your acid or base', min: 1e-12, max: 1e-1, value: 1e-4, fmt: v => U.sig(v, 2), onInput: v => { ANALYTES.forEach(a => { if (a.id === 'cwa') a.Ka = [v]; if (a.id === 'cwb') a.Kb = v; }); upd(); } });
     const si = U.select({ label: 'Indicator', options: Object.keys(INDICATORS).map(k => ({ value: k, label: k === 'none' ? 'None' : `${k} (pH ${INDICATORS[k][0]}–${INDICATORS[k][1]})` })), value: ind, onChange: v => { ind = v; upd(); } });
     const slV = U.slider({ label: 'Titrant added', min: 0, max: 60, step: 0.05, value: Vt, unit: 'mL', fmt: v => v.toFixed(2), onInput: v => { Vt = v; playing = false; upd(); } });
     const playBtn = U.btn('▶ Auto-titrate', () => { if (Vt >= maxV() - 0.1) Vt = 0; playing = !playing; }, 'primary');
@@ -6231,7 +6889,7 @@ App.register({
     const cv = U.canvas(null, { aspect: 1.55, scope, drag: true, hint: 'drag on the curve', draw });
     const flask = U.canvas(null, { aspect: 0.95, scope });
     el.append(h('div', { class: 'grid-viz' }, h('div', { class: 'stack' }, U.panel(null, cv.wrap, slV.el, h('div', { class: 'row' }, playBtn)), notes),
-      h('div', { class: 'stack' }, U.panel('Setup', sel.el, s1.el, s2.el, s3.el, si.el), stats.el, U.panel('Flask', flask.wrap), spBox)));
+      h('div', { class: 'stack' }, U.panel('Setup', sel.el, kS.el, s1.el, s2.el, s3.el, si.el), stats.el, U.panel('Flask', flask.wrap), spBox)));
     const A = () => ANALYTES[ai];
     const nProt = () => A().Ka ? A().Ka.length : 1;
     const Veq = () => Ca * Va * (A().kind === 'acid' ? 1 : 1) / Ct;
@@ -6306,6 +6964,8 @@ App.register({
     }
     function upd() {
       slV.input.max = maxV(); if (Vt > maxV()) { Vt = maxV(); }
+      kS.el.hidden = !A().custom;
+      if (A().custom) kS.el.querySelector('.lbl span').textContent = A().kind === 'acid' ? 'Ka of your weak acid' : 'Kb of your weak base';
       slV.set(Vt);
       const a = A(), pH = pHat(Vt), e = Veq();
       stats.set('ph', pH.toFixed(2)); stats.set('v', Vt.toFixed(2) + ' mL'); stats.set('reg', region(Vt));
@@ -6315,7 +6975,7 @@ App.register({
       const eqpH = pHat(e);
       let txt = `Equivalence volume = (${Ca.toFixed(2)} M × ${Va} mL) / ${Ct.toFixed(2)} M = <b>${e.toFixed(2)} mL</b> of ${tit}${nProt() > 1 ? ' per proton' : ''}. pH at the ${nProt() > 1 ? 'first ' : ''}equivalence point = <b>${eqpH.toFixed(2)}</b>.`;
       if (a.kind === 'acid' && a.Ka) txt += ` Half-equivalence pH = ${pHat(e / 2).toFixed(2)} ≈ pK<sub>a1</sub> = ${(-Math.log10(a.Ka[0])).toFixed(2)}.`;
-      if (a.kind === 'base') txt += ` Half-equivalence pH = ${pHat(e / 2).toFixed(2)} = pK<sub>a</sub> of NH₄⁺ (${(14 + Math.log10(a.Kb)).toFixed(2)}).`;
+      if (a.kind === 'base') txt += ` Half-equivalence pH = ${pHat(e / 2).toFixed(2)} = pK<sub>a</sub> of ${a.sp[0]} (${(14 + Math.log10(a.Kb)).toFixed(2)}).`;
       notes.appendChild(U.callout(txt));
       const I = INDICATORS[ind];
       if (I) notes.appendChild(U.callout(eqpH >= I[0] - 0.3 && eqpH <= I[1] + 0.3 ? `${ind} changes color between pH ${I[0]} and ${I[1]}, which brackets the equivalence pH. Good choice.` : `${ind} changes color between pH ${I[0]} and ${I[1]}, but the equivalence pH is ${eqpH.toFixed(2)}. The endpoint would not match the equivalence point.`, eqpH >= I[0] - 0.3 && eqpH <= I[1] + 0.3 ? 'good' : 'bad'));
@@ -7106,7 +7766,7 @@ App.register({
       h('div', null,
         h('div', { class: 'eyebrow' }, 'AP Chemistry · Units 1–9'),
         h('h1', null, 'See the chemistry behind every AP topic.'),
-        h('p', null, 'Interactive models for the whole AP Chemistry course. Build Lewis structures, spin molecules in 3D, watch intermolecular forces at work, run titrations, and build electrochemical cells. Every tool lists the key ideas you need for the exam.'),
+        h('p', null, 'Interactive models for the whole AP Chemistry course. Build Lewis structures, spin molecules in 3D, watch intermolecular forces at work, run titrations, and build electrochemical cells. Type in your own molecules, reactions and salts to test them in the simulations. Every tool lists the key ideas you need for the exam.'),
         h('div', { class: 'row' },
           h('a', { class: 'btn primary', href: '#imf' }, 'Explore intermolecular forces'),
           h('a', { class: 'btn', href: '#lewis' }, 'Draw Lewis structures'),

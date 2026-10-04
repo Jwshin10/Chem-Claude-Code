@@ -32,6 +32,7 @@ const LEWIS = {
         const nx = -Math.sin(dir), ny = -Math.cos(dir);
         [-1, 1].forEach(k => { c.beginPath(); c.arc(px + nx * 3.6 * k, py + ny * 3.6 * k, 2.3, 0, 7); c.fillStyle = o.lpColor || t.ink2; c.fill(); });
       });
+      (a.singleDirs || []).forEach(dir => { const r = fs * 0.85; c.beginPath(); c.arc(x + Math.cos(dir) * r, y - Math.sin(dir) * r, 2.4, 0, 7); c.fillStyle = o.lpColor || t.ink2; c.fill(); });
       if (o.formal && a.fc) {
         // put the badge in the widest empty direction around the atom
         const i = s.atoms.indexOf(a);
@@ -59,7 +60,7 @@ const LEWIS = {
 
 App.register({
   id: 'lewis', unit: 2, sym: 'Lw', title: 'Lewis Structures',
-  desc: 'Step-by-step Lewis diagrams with formal charges and resonance for 50+ molecules and ions.',
+  desc: 'Step-by-step Lewis diagrams with formal charges and resonance. Pick from 58 molecules and ions or type your own formula.',
   tags: ['lewis structure', 'lewis diagram', 'dot structure', 'formal charge', 'resonance', 'octet rule', 'expanded octet', 'lone pairs', 'valence electrons', 'bond diagram'],
   keyIdeas: [
     'Count all valence electrons, add one for each negative charge and subtract one for each positive charge.',
@@ -71,6 +72,7 @@ App.register({
   ],
   render(el, scope) {
     const h = U.h;
+    BUILDER.restore();
     let id = U.store.get('lewisId', 'no3'), res = 0, step = 5, formal = true;
     if (!MOLECULES.byId[id]) id = 'no3';
     const opts = [
@@ -85,7 +87,15 @@ App.register({
     const cv = U.canvas(null, { aspect: 1.45, scope, draw });
     el.append(h('div', { class: 'grid-viz' },
       h('div', { class: 'stack' }, U.panel(null, h('div', { class: 'flex-between' }, h('h3', { id: 'lwTitle' }), resBox), cv.wrap), stepBox),
-      h('div', { class: 'stack' }, U.panel('Choose', sel.el, fc.el), infoBox)));
+      h('div', { class: 'stack' }, U.panel('Choose', sel.el, fc.el), BUILDER.moleculePanel(spec => { id = spec.id; res = 0; step = 5; U.store.set('lewisId', id); syncCustom(); update(); }).el, infoBox)));
+    function syncCustom() {
+      const old = sel.input.querySelector('optgroup[data-custom]');
+      if (old) old.remove();
+      const m = MOLECULES.byId.custom;
+      if (m) { const g = h('optgroup', { label: 'Your molecule', 'data-custom': '1' }, h('option', { value: 'custom' }, U.chemText(m.f) + ' — ' + m.name)); sel.input.insertBefore(g, sel.input.firstChild); }
+      sel.set(id);
+    }
+    syncCustom();
 
     function structure() {
       const m = MOLECULES.byId[id];
@@ -93,25 +103,21 @@ App.register({
       // step-by-step for single-centre molecules
       const s = MOLECULES.build(m, 0);
       const total = MOLECULES.totalValence(m);
-      const st = { atoms: s.atoms.map(a => Object.assign({}, a)), bonds: s.bonds.map(b => Object.assign({}, b, { order: 1 })), q: s.q };
-      const B = m.L.length;
-      if (step === 1) { st.bonds = []; st.atoms.forEach(a => { a.lpDirs = []; a.fc = 0; }); return st; }
-      st.atoms.forEach(a => { a.fc = 0; });
-      if (step === 2) { st.atoms.forEach(a => a.lpDirs = []); return st; }
-      let left = total - 2 * B;
-      st.atoms.slice(1).forEach(a => {
-        const need = a.el === 'H' ? 0 : 3;
-        const give = Math.min(need, Math.floor(left / 2));
-        a.lpDirs = a.lpDirs ? lpFor(a, give) : [];
+      const st = { atoms: s.atoms.map(a => Object.assign({}, a, { fc: 0, lpDirs: [] })), bonds: s.bonds.map(b => Object.assign({}, b, { order: 1 })), q: s.q };
+      if (step === 1) { st.bonds = []; return st; }
+      if (step === 2) return st;
+      let left = total - 2 * st.bonds.length;
+      const dirsOf = i => st.bonds.filter(b => b.a === i || b.b === i).map(b => { const o = st.atoms[b.a === i ? b.b : b.a], a = st.atoms[i]; return Math.atan2(o.y - a.y, o.x - a.x); });
+      st.atoms.forEach((a, i) => {
+        if (i === 0 || a.el === 'H') return;
+        const give = Math.min(Math.max(0, 4 - dirsOf(i).length), Math.floor(left / 2));
+        a.lpDirs = MOLECULES.lonePairDirs(dirsOf(i), give);
         left -= 2 * give;
       });
-      st.atoms[0].lpDirs = [];
       if (step === 3) return st;
-      const clp = Math.max(0, Math.floor(left / 2));
-      st.atoms[0].lpDirs = centralDirs(m, clp);
+      st.atoms[0].lpDirs = centralDirs(m, Math.max(0, Math.floor(left / 2)));
       return st;
     }
-    function lpFor(a, n) { const d = Math.atan2(-a.y, -a.x); const t = d + Math.PI; return n === 3 ? [t - Math.PI / 2, t, t + Math.PI / 2] : n === 2 ? [t - Math.PI / 3, t + Math.PI / 3] : n === 1 ? [t] : []; }
     function centralDirs(m, n) {
       const base = MOLECULES.build(m, 0).atoms[0].lpDirs;
       if (n <= base.length) return base.slice(0, n);
@@ -133,14 +139,14 @@ App.register({
       // step-by-step builder
       U.clear(stepBox);
       if (m.c) {
-        const total = MOLECULES.totalValence(m), B = m.L.length;
+        const total = MOLECULES.totalValence(m), B = m.L.length + m.L.reduce((t, l) => t + (l[2] || 0), 0);
         const segS = U.seg({ options: [1, 2, 3, 4, 5].map(k => ({ value: k, label: 'Step ' + k })), value: step, onChange: v => { step = v; update(); } });
-        const term = m.L.filter(l => l[0] !== 'H').length;
-        const after3 = total - 2 * B - 6 * term;
+        const outer = m.L.reduce((t, l) => t + (l[0] === 'H' ? 0 : 2 * (3 - (l[2] || 0))), 0);
+        const after3 = total - 2 * B - outer;
         const texts = {
           1: `<b>Count valence electrons.</b> ${countText(m)} = <b>${total}</b> electrons to place.`,
           2: `<b>Connect with single bonds.</b> ${m.c} is the central atom (least electronegative, not H). ${B} bonds use ${2 * B} electrons → ${total - 2 * B} left.`,
-          3: `<b>Complete octets on terminal atoms.</b> ${term ? `Each of the ${term} non-hydrogen terminal atoms gets 3 lone pairs (${6 * term} e⁻). ` : 'Hydrogen only needs 2 electrons. '}${Math.max(0, after3)} electrons left.`,
+          3: `<b>Complete octets on the outer atoms.</b> ${outer ? `Lone pairs go on the outer atoms until each has 8 electrons (${outer} e⁻ used). ` : 'Hydrogen only needs 2 electrons. '}${Math.max(0, after3)} electrons left.`,
           4: `<b>Put leftover electrons on the central atom.</b> ${after3 > 0 ? `${after3} electrons → ${after3 / 2} lone pair${after3 / 2 > 1 ? 's' : ''} on ${m.c}.` : 'No electrons left over.'}`,
           5: finalText(m),
         };
@@ -163,6 +169,8 @@ App.register({
           h('dt', null, 'Molecular geometry'), h('dd', null, V.shape),
           h('dt', null, 'Hybridization'), h('dd', null, V.hyb)),
           h('a', { class: 'btn sm', href: '#vsepr', onclick: () => U.store.set('vseprId', m.id) }, 'View in 3D →')));
+      } else if (m.atom) {
+        infoBox.appendChild(U.callout(`This is a <b>Lewis dot symbol</b>: ${MOLECULES.totalValence(m)} valence electron${MOLECULES.totalValence(m) === 1 ? '' : 's'} drawn around the symbol. Single dots fill the four sides first, then pair up.`));
       } else {
         const centers = s.atoms.map((a, i) => ({ a, i })).filter(x => x.a.bondCount > 1);
         infoBox.appendChild(U.panel('Geometry at each central atom', U.table(['Atom', 'Domains', 'Shape', 'Hybrid.'], centers.map(x => {
@@ -175,7 +183,7 @@ App.register({
       cv.redraw();
     }
     function countText(m) {
-      const els = [m.c].concat(m.L.map(l => l[0]));
+      const els = [m.c].concat(m.L.flatMap(l => [l[0]].concat(Array(l[2] || 0).fill('H'))));
       const cnt = {}; els.forEach(e => cnt[e] = (cnt[e] || 0) + 1);
       let s = Object.keys(cnt).map(e => `${cnt[e] > 1 ? cnt[e] + '×' : ''}${e} (${MOLECULES.val(e)})`).join(' + ');
       if (m.q) s += m.q < 0 ? ` + ${-m.q} (negative charge)` : ` − ${m.q} (positive charge)`;

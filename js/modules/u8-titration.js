@@ -22,6 +22,8 @@ App.register({
       { id: 'phos', name: 'Triprotic: phosphoric acid H₃PO₄', kind: 'acid', Ka: [7.5e-3, 6.2e-8, 4.8e-13], label: 'H₃PO₄', sp: ['H₃PO₄', 'H₂PO₄⁻', 'HPO₄²⁻', 'PO₄³⁻'] },
       { id: 'wb', name: 'Weak base: NH₃ (titrated with HCl)', kind: 'base', Kb: 1.8e-5, label: 'NH₃', sp: ['NH₄⁺', 'NH₃'] },
       { id: 'sb', name: 'Strong base: NaOH (titrated with HCl)', kind: 'sbase', label: 'NaOH' },
+      { id: 'cwa', name: 'Your own weak acid (set Ka below)', kind: 'acid', Ka: [1e-4], label: 'HA', sp: ['HA', 'A⁻'], custom: true },
+      { id: 'cwb', name: 'Your own weak base (set Kb below)', kind: 'base', Kb: 1e-4, label: 'B', sp: ['BH⁺', 'B'], custom: true },
     ];
     const INDICATORS = { none: null, 'Methyl orange': [3.1, 4.4, '#e0413b', '#e6b800'], 'Methyl red': [4.4, 6.2, '#e0413b', '#e6b800'], 'Bromothymol blue': [6.0, 7.6, '#e6b800', '#2f6fe0'], Phenolphthalein: [8.2, 10.0, 'rgba(255,255,255,0)', '#e04a9a'] };
     let ai = 1, Ca = 0.10, Va = 25, Ct = 0.10, Vt = 12.5, ind = 'Phenolphthalein', playing = false;
@@ -29,6 +31,7 @@ App.register({
     const s1 = U.slider({ label: 'Analyte concentration', min: 0.02, max: 0.5, step: 0.01, value: Ca, unit: 'M', fmt: v => v.toFixed(2), onInput: v => { Ca = v; upd(); } });
     const s2 = U.slider({ label: 'Analyte volume', min: 10, max: 50, step: 1, value: Va, unit: 'mL', onInput: v => { Va = v; upd(); } });
     const s3 = U.slider({ label: 'Titrant concentration', min: 0.02, max: 0.5, step: 0.01, value: Ct, unit: 'M', fmt: v => v.toFixed(2), onInput: v => { Ct = v; upd(); } });
+    const kS = U.logSlider({ label: 'K of your acid or base', min: 1e-12, max: 1e-1, value: 1e-4, fmt: v => U.sig(v, 2), onInput: v => { ANALYTES.forEach(a => { if (a.id === 'cwa') a.Ka = [v]; if (a.id === 'cwb') a.Kb = v; }); upd(); } });
     const si = U.select({ label: 'Indicator', options: Object.keys(INDICATORS).map(k => ({ value: k, label: k === 'none' ? 'None' : `${k} (pH ${INDICATORS[k][0]}–${INDICATORS[k][1]})` })), value: ind, onChange: v => { ind = v; upd(); } });
     const slV = U.slider({ label: 'Titrant added', min: 0, max: 60, step: 0.05, value: Vt, unit: 'mL', fmt: v => v.toFixed(2), onInput: v => { Vt = v; playing = false; upd(); } });
     const playBtn = U.btn('▶ Auto-titrate', () => { if (Vt >= maxV() - 0.1) Vt = 0; playing = !playing; }, 'primary');
@@ -39,7 +42,7 @@ App.register({
     const cv = U.canvas(null, { aspect: 1.55, scope, drag: true, hint: 'drag on the curve', draw });
     const flask = U.canvas(null, { aspect: 0.95, scope });
     el.append(h('div', { class: 'grid-viz' }, h('div', { class: 'stack' }, U.panel(null, cv.wrap, slV.el, h('div', { class: 'row' }, playBtn)), notes),
-      h('div', { class: 'stack' }, U.panel('Setup', sel.el, s1.el, s2.el, s3.el, si.el), stats.el, U.panel('Flask', flask.wrap), spBox)));
+      h('div', { class: 'stack' }, U.panel('Setup', sel.el, kS.el, s1.el, s2.el, s3.el, si.el), stats.el, U.panel('Flask', flask.wrap), spBox)));
     const A = () => ANALYTES[ai];
     const nProt = () => A().Ka ? A().Ka.length : 1;
     const Veq = () => Ca * Va * (A().kind === 'acid' ? 1 : 1) / Ct;
@@ -114,6 +117,8 @@ App.register({
     }
     function upd() {
       slV.input.max = maxV(); if (Vt > maxV()) { Vt = maxV(); }
+      kS.el.hidden = !A().custom;
+      if (A().custom) kS.el.querySelector('.lbl span').textContent = A().kind === 'acid' ? 'Ka of your weak acid' : 'Kb of your weak base';
       slV.set(Vt);
       const a = A(), pH = pHat(Vt), e = Veq();
       stats.set('ph', pH.toFixed(2)); stats.set('v', Vt.toFixed(2) + ' mL'); stats.set('reg', region(Vt));
@@ -123,7 +128,7 @@ App.register({
       const eqpH = pHat(e);
       let txt = `Equivalence volume = (${Ca.toFixed(2)} M × ${Va} mL) / ${Ct.toFixed(2)} M = <b>${e.toFixed(2)} mL</b> of ${tit}${nProt() > 1 ? ' per proton' : ''}. pH at the ${nProt() > 1 ? 'first ' : ''}equivalence point = <b>${eqpH.toFixed(2)}</b>.`;
       if (a.kind === 'acid' && a.Ka) txt += ` Half-equivalence pH = ${pHat(e / 2).toFixed(2)} ≈ pK<sub>a1</sub> = ${(-Math.log10(a.Ka[0])).toFixed(2)}.`;
-      if (a.kind === 'base') txt += ` Half-equivalence pH = ${pHat(e / 2).toFixed(2)} = pK<sub>a</sub> of NH₄⁺ (${(14 + Math.log10(a.Kb)).toFixed(2)}).`;
+      if (a.kind === 'base') txt += ` Half-equivalence pH = ${pHat(e / 2).toFixed(2)} = pK<sub>a</sub> of ${a.sp[0]} (${(14 + Math.log10(a.Kb)).toFixed(2)}).`;
       notes.appendChild(U.callout(txt));
       const I = INDICATORS[ind];
       if (I) notes.appendChild(U.callout(eqpH >= I[0] - 0.3 && eqpH <= I[1] + 0.3 ? `${ind} changes color between pH ${I[0]} and ${I[1]}, which brackets the equivalence pH. Good choice.` : `${ind} changes color between pH ${I[0]} and ${I[1]}, but the equivalence pH is ${eqpH.toFixed(2)}. The endpoint would not match the equivalence point.`, eqpH >= I[0] - 0.3 && eqpH <= I[1] + 0.3 ? 'good' : 'bad'));

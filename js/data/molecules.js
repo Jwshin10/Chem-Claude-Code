@@ -16,6 +16,8 @@ const MOLECULES = (() => {
     { id: 'becl2', f: 'BeCl2', name: 'Beryllium chloride', c: 'Be', L: [['Cl', 1], ['Cl', 1]], lp: 0, note: 'Be is stable with only 4 valence electrons (an incomplete octet).' },
     { id: 'co2', f: 'CO2', name: 'Carbon dioxide', c: 'C', L: [['O', 2], ['O', 2]], lp: 0 },
     { id: 'hcn', f: 'HCN', name: 'Hydrogen cyanide', c: 'C', L: [['H', 1], ['N', 3]], lp: 0 },
+    { id: 'n2o', f: 'N2O', name: 'Nitrous oxide', c: 'N', L: [['N', 2], ['O', 2]], lp: 0, note: 'N is the central atom even though O appears only once. Another resonance form, N≡N–O, also contributes.' },
+    { id: 'scn', f: 'SCN^-', name: 'Thiocyanate ion', c: 'C', L: [['S', 2], ['N', 2]], lp: 0, q: -1 },
     // steric number 3
     { id: 'bf3', f: 'BF3', name: 'Boron trifluoride', c: 'B', L: [['F', 1], ['F', 1], ['F', 1]], lp: 0, note: 'B has only 6 valence electrons (incomplete octet).' },
     { id: 'so3', f: 'SO3', name: 'Sulfur trioxide', c: 'S', L: [['O', 2], ['O', 2], ['O', 2]], lp: 0, note: 'Drawn with formal charges minimized (expanded octet on S). A structure with one S=O and two S–O bonds that obeys the octet rule is also accepted.' },
@@ -91,20 +93,34 @@ const MOLECULES = (() => {
   };
 
   /** build a drawable structure: {atoms:[{el,x,y,lp,fc,lpDirs}], bonds:[{a,b,order}], q} */
+  function evenLayout(B, lp) {
+    const n = B + lp, a = Array.from({ length: n }, (_, k) => 90 + k * 360 / n);
+    return [a.slice(0, B), a.slice(B)];
+  }
   function build(m, resIndex = 0) {
+    if (m.atom) return m.struct;
     let atoms, bonds;
     if (m.c) {
       const B = m.L.length;
-      const lay = LAYOUT[B + ',' + m.lp];
+      const lay = LAYOUT[B + ',' + m.lp] || evenLayout(B, m.lp);
       atoms = [{ el: m.c, x: 0, y: 0, lp: m.lp, fixedLp: lay[1] }];
       bonds = [];
       let orders = m.L.map(l => l[1]);
       if (resIndex > 0) orders = resonanceOrders(m)[resIndex] || orders;
       m.L.forEach((l, i) => {
         const a = lay[0][i] * Math.PI / 180;
-        const tl = m.tlp ? m.tlp[i] : (l[0] === 'H' ? 0 : 4 - orders[i]);
+        const tl = m.tlp ? m.tlp[i] : (l[0] === 'H' ? 0 : 4 - orders[i] - (l[2] || 0));
         atoms.push({ el: l[0], x: Math.cos(a), y: Math.sin(a), lp: tl });
         bonds.push({ a: 0, b: i + 1, order: orders[i] });
+      });
+      // hydrogens attached to ligands (e.g. the O–H groups of oxyacids)
+      m.L.forEach((l, i) => {
+        const nH = l[2] || 0, a = lay[0][i] * Math.PI / 180;
+        for (let k = 0; k < nH; k++) {
+          const t = a + (k - (nH - 1) / 2) * 0.9;
+          atoms.push({ el: 'H', x: Math.cos(a) + Math.cos(t) * 0.95, y: Math.sin(a) + Math.sin(t) * 0.95, lp: 0 });
+          bonds.push({ a: i + 1, b: atoms.length - 1, order: 1 });
+        }
       });
     } else {
       const bset = resIndex > 0 && m.res ? m.res[resIndex - 1] : m.bonds;
@@ -112,7 +128,8 @@ const MOLECULES = (() => {
       bonds = bset.map(([a, b, order]) => ({ a, b, order }));
       atoms.forEach((at, i) => {
         const s = bonds.filter(b => b.a === i || b.b === i).reduce((t, b) => t + b.order, 0);
-        at.lp = at.el === 'H' ? 0 : Math.max(0, 4 - s);
+        const ov = resIndex === 0 ? m.atoms[i][3] : null;
+        at.lp = ov != null ? ov : at.el === 'H' ? 0 : Math.max(0, 4 - s);
       });
     }
     // formal charges & lone pair directions
@@ -156,7 +173,7 @@ const MOLECULES = (() => {
   function resonanceOrders(m) {
     if (!m.c) return [m.bonds].concat(m.res || []);
     const base = m.L.map(l => l[1]);
-    const els = m.L.map(l => l[0]);
+    const els = m.L.map(l => l[0] + '|' + (l[2] || 0));
     const seen = new Set(), out = [];
     const perm = (arr, k) => {
       if (k === arr.length) {
@@ -177,13 +194,15 @@ const MOLECULES = (() => {
     return out;
   }
   function resonanceCount(m) {
+    if (m.atom) return 1;
     if (!m.c) return 1 + (m.res ? m.res.length : 0);
     if (m.tlp) return 1;
     return Math.min(6, resonanceOrders(m).length);
   }
 
   function totalValence(m) {
-    const els = m.c ? [m.c].concat(m.L.map(l => l[0])) : m.atoms.map(a => a[0]);
+    if (m.atom) return val(m.struct.atoms[0].el) - (m.q || 0);
+    const els = m.c ? [m.c].concat(m.L.flatMap(l => [l[0]].concat(Array(l[2] || 0).fill('H')))) : m.atoms.map(a => a[0]);
     return els.reduce((t, e) => t + val(e), 0) - (m.q || 0);
   }
 
@@ -213,9 +232,10 @@ const MOLECULES = (() => {
   const SYMMETRIC = new Set(['2,0', '3,0', '4,0', '5,0', '6,0', '5,3', '6,2']);
   function polarity(m) {
     if (m.q) return 'ion';
+    if (m.atom) return 'atom';
     const B = m.L.length;
-    if (B === 1) return m.L[0][0] === m.c ? 'nonpolar' : 'polar';
-    const same = m.L.every(l => l[0] === m.L[0][0]);
+    if (B === 1) return m.L[0][0] === m.c && !m.L[0][2] ? 'nonpolar' : 'polar';
+    const same = m.L.every(l => l[0] === m.L[0][0] && (l[2] || 0) === (m.L[0][2] || 0));
     if (!same) return 'polar';
     const key = (B + m.lp) + ',' + m.lp;
     if (!SYMMETRIC.has(key)) return 'polar';
@@ -223,7 +243,8 @@ const MOLECULES = (() => {
     return 'nonpolar';
   }
   function bondCounts(m) {
-    const bonds = m.c ? m.L.map(l => l[1]) : m.bonds.map(b => b[2]);
+    if (m.atom) return { sigma: 0, pi: 0 };
+    const bonds = m.c ? m.L.map(l => l[1]).concat(m.L.flatMap(l => Array(l[2] || 0).fill(1))) : m.bonds.map(b => b[2]);
     return { sigma: bonds.length, pi: bonds.reduce((t, o) => t + o - 1, 0) };
   }
 
@@ -270,5 +291,6 @@ const MOLECULES = (() => {
 
   const all = single.concat(multi);
   const byId = Object.fromEntries(all.map(m => [m.id, m]));
-  return { single, multi, all, byId, build, resonanceCount, totalValence, vsepr, polarity, bondCounts, domains3d, validate, val };
+  const setCustom = spec => { byId[spec.id] = spec; };
+  return { single, multi, all, byId, build, resonanceCount, totalValence, vsepr, polarity, bondCounts, domains3d, validate, val, lonePairDirs, setCustom, LAYOUT };
 })();

@@ -13,7 +13,7 @@ App.register({
     const h = U.h;
     U.tabs(el, [{ label: 'Bond enthalpies', render: bonds }, { label: 'Enthalpy of formation', render: formation }, { label: 'Hess’s law puzzle', render: hess }], scope, { key: 'enthalpy' });
 
-    const BE = { 'H–H': 436, 'C–H': 413, 'C–C': 348, 'C=C': 614, 'C≡C': 839, 'O=O': 495, 'C=O (CO₂)': 799, 'C–O': 358, 'O–H': 463, 'N≡N': 941, 'N–H': 391, 'H–Cl': 431, 'Cl–Cl': 242, 'C–Cl': 328, 'H–F': 567, 'F–F': 159 };
+    const BE = { 'H–H': 436, 'C–H': 413, 'C–C': 348, 'C=C': 614, 'C≡C': 839, 'O=O': 495, 'C=O (CO₂)': 799, 'C–O': 358, 'O–H': 463, 'N≡N': 941, 'N–H': 391, 'H–Cl': 431, 'Cl–Cl': 242, 'C–Cl': 328, 'H–F': 567, 'F–F': 159, 'C=O': 745, 'C≡O': 1072, 'O–O': 146, 'N–N': 163, 'N=N': 418, 'C–N': 293, 'C=N': 615, 'C≡N': 891, 'N–O': 201, 'N=O': 607, 'H–Br': 366, 'H–I': 299, 'Br–Br': 193, 'I–I': 151, 'C–F': 485, 'C–Br': 276, 'C–I': 240, 'S–H': 339, 'C–S': 259, 'S=O': 523, 'S–O': 265, 'O–F': 190, 'N–F': 272, 'N–Cl': 200, 'O–Cl': 203, 'S–Cl': 253, 'F–Cl': 253, 'P–H': 322, 'P–Cl': 326, 'Si–H': 323, 'Si–O': 452, 'S–S': 266, 'C=S': 577 };
     function bonds(b, s) {
       const RX = [
         { eq: 'CH4 + 2O2 -> CO2 + 2H2O', broken: [['C–H', 4], ['O=O', 2]], formed: [['C=O (CO₂)', 2], ['O–H', 4]] },
@@ -28,7 +28,37 @@ App.register({
       const sel = U.select({ label: 'Reaction', options: RX.map((r, i) => ({ value: i, label: U.chemText(r.eq) })), value: ri, onChange: v => { ri = +v; upd(); } });
       const out = h('div', { class: 'stack' });
       const cv = U.canvas(null, { aspect: 1.25, scope: s, draw });
-      b.append(h('div', { class: 'grid-viz' }, U.panel('Energy ladder', cv.wrap), h('div', { class: 'stack' }, U.panel('Choose', sel.el), out, U.panel('Average bond enthalpies (kJ/mol)', U.table(['Bond', 'Energy'], Object.keys(BE).map(k => [k, BE[k]]), { num: [1] })))));
+      const PRI = { C: 0, Si: 1, N: 2, P: 3, S: 4, O: 5, H: 6, F: 7, Cl: 8, Br: 9, I: 10 };
+      const bkey = (x, y, o, co2) => co2 && o === 2 ? 'C=O (CO₂)' : ((PRI[x] ?? 20) <= (PRI[y] ?? 20) ? x + ['', '–', '=', '≡'][o] + y : y + ['', '–', '=', '≡'][o] + x);
+      const own = BUILDER.entry({ title: 'Estimate ΔH for your own reaction', label: 'Equation (neutral molecules; condensed formulas work)', placeholder: 'e.g. C2H6 + O2 -> CO2 + H2O', examples: ['C2H6 + O2 -> CO2 + H2O', 'CH2CH2 + Cl2 -> CH2ClCH2Cl', 'CH3OH + O2 -> CO2 + H2O', 'N2H4 + O2 -> N2 + H2O', 'H2 + Br2 -> HBr'], button: 'Calculate', onSubmit: text => {
+        let R, P, co;
+        try { ({ R, P } = CHEM.parseEquation(text)); co = CHEM.balance(R, P); } catch (e) { return { ok: false, msg: e.message }; }
+        if (R.concat(P).some(x => x.charge || x.electron)) return { ok: false, msg: 'Bond enthalpies apply to neutral molecules (gases), not ions.' };
+        const tally = (S, off) => {
+          const t = {};
+          S.forEach((sp, i) => {
+            const r = BUILDER.fromText(sp.formula);
+            if (r.error) throw new Error(U.chem(sp.formula) + ': ' + r.error);
+            if (r.spec.atom) throw new Error(`${U.chem(sp.formula)} is a single atom. Write elements as the molecules they form (O2, H2, Cl2).`);
+            const st = MOLECULES.build(r.spec);
+            st.bonds.forEach(bd => { const k = bkey(st.atoms[bd.a].el, st.atoms[bd.b].el, bd.order, sp.formula === 'CO2'); t[k] = (t[k] || 0) + co[off + i]; });
+          });
+          return t;
+        };
+        let br, fm;
+        try { br = tally(R, 0); fm = tally(P, R.length); } catch (e) { return { ok: false, msg: e.message }; }
+        const miss = [...new Set(Object.keys(br).concat(Object.keys(fm)).filter(k => BE[k] == null))];
+        if (miss.length) return { ok: false, msg: 'No average bond enthalpy is listed for: ' + miss.join(', ') + '.' };
+        const side = (S, off) => S.map((x, i) => (co[off + i] > 1 ? co[off + i] : '') + x.formula).join(' + ');
+        const entry = { eq: side(R, 0) + ' -> ' + side(P, R.length), broken: Object.entries(br), formed: Object.entries(fm), custom: true };
+        let k = RX.findIndex(r => r.custom);
+        if (k < 0) { RX.push(entry); k = RX.length - 1; sel.input.appendChild(h('option', { value: k })); } else RX[k] = entry;
+        sel.input.options[k].textContent = 'Yours: ' + U.chemText(entry.eq);
+        ri = k; sel.set(k); upd();
+        const dH = sum(entry.broken) - sum(entry.formed);
+        return { ok: true, msg: `Balanced: ${CHEM.eqHTML(R, P, co)}. Bonds were counted from each molecule’s Lewis structure. Estimated ΔH = <b>${dH > 0 ? '+' : ''}${dH} kJ</b>.` };
+      } });
+      b.append(h('div', { class: 'grid-viz' }, U.panel('Energy ladder', cv.wrap), h('div', { class: 'stack' }, U.panel('Choose', sel.el), own.el, out, U.panel('Average bond enthalpies (kJ/mol)', U.table(['Bond', 'Energy'], Object.keys(BE).map(k => [k, BE[k]]), { num: [1] })))));
       const sum = list => list.reduce((t, [k, n]) => t + BE[k] * n, 0);
       function draw(c, w, H) {
         const t = U.theme(), r = RX[ri], Bk = sum(r.broken), Fm = sum(r.formed), dH = Bk - Fm;

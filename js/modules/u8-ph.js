@@ -73,6 +73,7 @@ App.register({
       const SP = [
         ['HCl', 'acid', Infinity], ['HNO3', 'acid', Infinity], ['HF', 'acid', 6.8e-4], ['HNO2', 'acid', 4.5e-4], ['CH3COOH', 'acid', 1.8e-5], ['HClO', 'acid', 3.0e-8], ['HCN', 'acid', 6.2e-10], ['NH4^+', 'acid', 5.6e-10],
         ['NaOH', 'base', Infinity], ['CH3NH2', 'base', 4.4e-4], ['NH3', 'base', 1.8e-5], ['C5H5N', 'base', 1.7e-9],
+        ['HA', 'acid', 1e-5, 'yours'], ['B', 'base', 1e-5, 'yours'],
       ];
       let si = 4, C = 0.1;
       const sel = U.select({ label: 'Substance', options: [{ group: 'Acids', options: SP.map((x, i) => [x, i]).filter(([x]) => x[1] === 'acid').map(([x, i]) => ({ value: i, label: `${U.chemText(x[0])} ${x[2] === Infinity ? '(strong)' : '(Ka = ' + U.sig(x[2], 2) + ')'}` })) }, { group: 'Bases', options: SP.map((x, i) => [x, i]).filter(([x]) => x[1] === 'base').map(([x, i]) => ({ value: i, label: `${U.chemText(x[0])} ${x[2] === Infinity ? '(strong)' : '(Kb = ' + U.sig(x[2], 2) + ')'}` })) }], value: si, onChange: v => { si = +v; upd(); } });
@@ -81,7 +82,9 @@ App.register({
       const out = h('div');
       const cv = U.canvas(null, { aspect: 1.35, scope: s });
       const gr = U.canvas(null, { aspect: 1.9, scope: s, draw: graph });
-      b.append(h('div', { class: 'grid-viz' }, h('div', { class: 'stack' }, U.panel('Particle view (water molecules not shown)', cv.wrap), U.panel('Percent ionization vs. concentration', gr.wrap)), h('div', { class: 'stack' }, U.panel('Choose', sel.el, cs.el), stats.el, out)));
+      [...sel.input.options].forEach(o => { const x = SP[+o.value]; if (x && x[3]) o.textContent = x[1] === 'acid' ? 'Your own weak acid HA (set Ka below)' : 'Your own weak base B (set Kb below)'; });
+      const kS = U.logSlider({ label: 'K of your acid or base', min: 1e-12, max: 1, value: 1e-5, fmt: v => U.sig(v, 2), onInput: v => { SP.forEach(x => { if (x[3]) x[2] = v; }); upd(); } });
+      b.append(h('div', { class: 'grid-viz' }, h('div', { class: 'stack' }, U.panel('Particle view (water molecules not shown)', cv.wrap), U.panel('Percent ionization vs. concentration', gr.wrap)), h('div', { class: 'stack' }, U.panel('Choose', sel.el, kS.el, cs.el), stats.el, out)));
       const calc = (conc = C) => {
         const [f, type, K] = SP[si];
         if (type === 'acid') {
@@ -117,6 +120,8 @@ App.register({
       });
       function upd() {
         const [f, type, K] = SP[si], r = calc();
+        kS.el.hidden = !SP[si][3];
+        if (SP[si][3]) kS.el.querySelector('.lbl span').textContent = type === 'acid' ? 'Ka of your weak acid' : 'Kb of your weak base';
         stats.set('ph', r.pH.toFixed(2)); stats.set('pi', (r.frac * 100).toFixed(r.frac > 0.999 ? 0 : 2) + '%'); stats.set('eq', Math.round(16 * r.frac) + ' of 16 shown');
         U.clear(out);
         const F = U.chem(f);

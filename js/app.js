@@ -148,7 +148,7 @@
       h('div', null,
         h('div', { class: 'eyebrow' }, 'AP Chemistry · Units 1–9'),
         h('h1', null, 'See the chemistry behind every AP topic.'),
-        h('p', null, 'Interactive models for the whole AP Chemistry course. Build Lewis structures, spin molecules in 3D, watch intermolecular forces at work, run titrations, and build electrochemical cells. Every tool lists the key ideas you need for the exam.'),
+        h('p', null, 'Interactive models for the whole AP Chemistry course. Build Lewis structures, spin molecules in 3D, watch intermolecular forces at work, run titrations, and build electrochemical cells. Type in your own molecules, reactions and salts to test them in the simulations. Every tool lists the key ideas you need for the exam.'),
         h('div', { class: 'row' },
           h('a', { class: 'btn primary', href: '#imf' }, 'Explore intermolecular forces'),
           h('a', { class: 'btn', href: '#lewis' }, 'Draw Lewis structures'),

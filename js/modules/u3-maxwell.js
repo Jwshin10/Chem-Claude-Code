@@ -23,7 +23,16 @@ App.register({
       const rows = h('div', { class: 'stack' });
       const cv = U.canvas(null, { aspect: 1.7, scope: s, draw });
       const tbl = h('div');
-      b.append(h('div', { class: 'grid-viz' }, U.panel(null, cv.wrap, tbl), h('div', { class: 'stack' }, U.panel('Curves', rows))));
+      const own = BUILDER.entry({ title: 'Add any gas', label: 'Formula', placeholder: 'e.g. SF6', examples: ['SF6', 'CH4', 'Cl2', 'C3H8', 'UF6'], button: 'Add', onSubmit: text => {
+        const k = text.replace(/\s+/g, '');
+        let M;
+        try { M = U.molarMass(k); } catch (e) { return { ok: false, msg: e.message + '.' }; }
+        GASES[k] = +M.toFixed(2);
+        curves[2] = { g: k, T: curves[2].T };
+        controls(); upd();
+        return { ok: true, msg: `${U.chem(k)} (M = ${M.toFixed(2)} g/mol) is now curve 3. Its RMS speed at ${curves[2].T} K is ${Math.sqrt(3 * K.R * curves[2].T / (M / 1000)).toFixed(0)} m/s.` };
+      } });
+      b.append(h('div', { class: 'grid-viz' }, U.panel(null, cv.wrap, tbl), h('div', { class: 'stack' }, U.panel('Curves', rows), own.el)));
       function controls() {
         U.clear(rows);
         const cols = ccols();

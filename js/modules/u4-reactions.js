@@ -154,7 +154,29 @@ const CHEM = (() => {
     rest.forEach((e, i) => { const a = start + i * 2 * Math.PI / n * (n === 2 && s.formula !== 'CO2' ? 0.29 : 1); const r = e === 'H' ? R * 0.65 : R * 0.9; U.drawAtom(c, x + Math.cos(a) * ring, y + Math.sin(a) * ring, r, e, { label: false }); });
     U.drawAtom(c, x, y, R, center, { label: false });
   }
-  return { parseSpecies, parseEquation, balance, balanceSigned, oxStates, fmtOx, spHTML, eqHTML, glyph, isMetal, nullspace };
+  /* split an ionic formula (NaCl, Ca3(PO4)2, (NH4)2SO4) into cation and anion with charges */
+  const POLY = { NH4: 1, NO3: -1, NO2: -1, OH: -1, CN: -1, SCN: -1, MnO4: -1, CH3COO: -1, HCO3: -1, HSO4: -1, H2PO4: -1, ClO: -1, ClO2: -1, ClO3: -1, ClO4: -1, BrO3: -1, IO3: -1, HS: -1, CO3: -2, SO4: -2, SO3: -2, S2O3: -2, CrO4: -2, Cr2O7: -2, C2O4: -2, HPO4: -2, PO4: -3, AsO4: -3 };
+  const MONO_AN = { F: -1, Cl: -1, Br: -1, I: -1, O: -2, S: -2, Se: -2, N: -3, P: -3 };
+  function ionic(raw) {
+    const s = String(raw).replace(/\s+/g, '').replace(/\((s|aq|l|g)\)$/i, '');
+    let m, cat, nc, rest;
+    if ((m = s.match(/^\(NH4\)(\d+)(.+)$/))) { cat = 'NH4'; nc = +m[1]; rest = m[2]; }
+    else if ((m = s.match(/^NH4(.+)$/))) { cat = 'NH4'; nc = 1; rest = m[1]; }
+    else if ((m = s.match(/^([A-Z][a-z]?)(\d*)(.+)$/))) { cat = m[1]; nc = m[2] ? +m[2] : 1; rest = m[3]; if (!ELEMENTS.bySym[cat] || !isMetal(cat)) return null; }
+    else return null;
+    let an, na;
+    const known = x => POLY[x] != null || MONO_AN[x] != null;
+    if ((m = rest.match(/^\(([^)]+)\)(\d+)$/))) { an = m[1]; na = +m[2]; }
+    else if (known(rest)) { an = rest; na = 1; }
+    else if ((m = rest.match(/^(.*?)(\d+)$/)) && known(m[1])) { an = m[1]; na = +m[2]; }
+    else return null;
+    const qa = POLY[an] != null ? POLY[an] : MONO_AN[an];
+    if (qa == null || qa >= 0) return null;
+    const qc = -qa * na / nc;
+    if (!Number.isInteger(qc) || qc < 1 || qc > 4) return null;
+    return { cat, nc, qc, an, na, qa };
+  }
+  return { parseSpecies, parseEquation, balance, balanceSigned, oxStates, fmtOx, spHTML, eqHTML, glyph, isMetal, nullspace, ionic, POLY };
 })();
 
 App.register({
