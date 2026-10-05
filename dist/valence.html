@@ -449,6 +449,89 @@ hr.sep { border: 0; border-top: 1px solid var(--rule); margin: 4px 0; width: 100
 @media (hover: none), (max-width: 560px) {
   .intro .hint { display: none; }
 }
+/* ---------- periodic table side panel ---------- */
+:root { --ptw: 540px; }
+.pt-btn {
+  display: inline-flex; align-items: center; gap: 7px; flex: none; height: 36px; padding: 0 11px;
+  border: 1px solid var(--rule-strong); border-radius: 6px; background: var(--paper-2);
+  font: 600 .875rem/1 var(--font); color: var(--ink); cursor: pointer;
+}
+.pt-btn svg { width: 18px; height: 18px; color: var(--ink-2); }
+.pt-btn:hover { border-color: var(--ink-3); }
+.pt-btn[aria-expanded="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.pt-btn[aria-expanded="true"] svg { color: var(--paper); }
+.pt-edge {
+  position: fixed; right: 0; top: 50%; z-index: 25; transform: translateY(-50%);
+  writing-mode: vertical-rl; display: flex; align-items: center; gap: 8px;
+  padding: 12px 6px; border: 1px solid var(--rule-strong); border-right: 0; border-radius: 6px 0 0 6px;
+  background: var(--paper-2); color: var(--ink-2); font: 600 .8rem/1 var(--font); cursor: pointer;
+}
+.pt-edge:hover { color: var(--ink); background: var(--paper); }
+.pt-edge-sym {
+  writing-mode: horizontal-tb; width: 22px; height: 22px; display: grid; place-items: center;
+  border-radius: 3px; background: #78b4ec; color: #172330; font: 800 12px/1 var(--font);
+}
+body.pt-open .pt-edge { display: none; }
+.pt-panel {
+  position: fixed; top: calc(var(--topbar) + env(safe-area-inset-top, 0px)); right: 0; bottom: 0; z-index: 38;
+  width: min(var(--ptw), 100vw); display: flex; flex-direction: column;
+  background: var(--paper); border-left: 1px solid var(--rule-strong);
+  box-shadow: -18px 0 40px -24px rgba(10, 16, 20, .35);
+  transform: translateX(102%); transition: transform .2s ease;
+}
+body.pt-open .pt-panel { transform: none; }
+.pt-panel[hidden] { display: none; }
+.pt-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px 10px 20px; border-bottom: 1px solid var(--rule); }
+.pt-head h2 { margin: 0; font-size: 1.1rem; }
+.pt-body { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 16px 20px 28px; display: flex; flex-direction: column; gap: 14px; container-type: inline-size; }
+.pt-find { width: 100%; }
+.pt-mini { display: grid; grid-template-columns: repeat(18, minmax(0, 1fr)); gap: 2px; }
+.pt-cell {
+  aspect-ratio: 1 / 1.12; min-width: 0; padding: 2px; border: 0; border-radius: 2px; cursor: pointer;
+  display: flex; flex-direction: column; justify-content: space-between; align-items: stretch;
+  color: #172330; line-height: 1; text-align: left;
+}
+.pt-cell .z { font: 600 7px var(--font); font-variant-numeric: tabular-nums; opacity: .75; }
+.pt-cell .s { font: 800 12px/1 var(--font); text-align: center; }
+.pt-cell .m { font: 500 6.5px var(--font); font-variant-numeric: tabular-nums; text-align: center; opacity: .75; white-space: nowrap; overflow: hidden; }
+.pt-cell:hover { outline: 2px solid var(--ink); outline-offset: 1px; z-index: 1; }
+.pt-cell.sel { outline: 2px solid var(--pink); outline-offset: 1px; z-index: 2; }
+.pt-cell.dim { opacity: .22; }
+.pt-cell.ph { background: none; border: 1px dashed var(--rule-strong); color: var(--ink-3); font-size: 6.5px; justify-content: center; align-items: center; cursor: default; }
+.pt-cell.ph:hover { outline: 0; }
+.pt-gap { height: 6px; }
+@container (max-width: 430px) {
+  .pt-cell .z, .pt-cell .m { display: none; }
+  .pt-cell { justify-content: center; aspect-ratio: 1 / 1.15; }
+  .pt-cell .s { font-size: 10px; }
+  .pt-cell.ph { font-size: 0; }
+}
+.pt-legend { font-size: .78rem; gap: 4px 12px; }
+.pt-info { border-top: 1px solid var(--rule); padding-top: 14px; display: flex; flex-direction: column; gap: 12px; }
+.pt-id { display: flex; gap: 14px; align-items: flex-start; }
+.pt-id h3 { margin: 0; font-size: 1.25rem; }
+.pt-big {
+  width: 80px; height: 88px; flex: none; border-radius: 4px; padding: 6px 7px;
+  display: flex; flex-direction: column; justify-content: space-between;
+  color: #172330;
+}
+.pt-big .z { font: 600 12px var(--font); font-variant-numeric: tabular-nums; }
+.pt-big b { font: 800 32px/1 var(--font); text-align: center; letter-spacing: -0.02em; }
+.pt-big .m { font: 500 11px var(--font); font-variant-numeric: tabular-nums; text-align: center; }
+.pt-scrim { display: none; }
+@media (min-width: 1500px) {
+  body.pt-open .layout { margin-right: var(--ptw); }
+  body.pt-open .pt-panel { box-shadow: none; }
+}
+@media (max-width: 860px) {
+  .pt-edge { display: none; }
+  body.pt-open .pt-scrim { display: block; position: fixed; inset: 0; z-index: 37; background: rgba(10, 16, 20, .4); }
+}
+@media (max-width: 560px) {
+  .pt-btn { padding: 0 9px; }
+  .pt-btn span { display: none; }
+  .pt-body { padding: 14px 16px 24px; }
+}
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; scroll-behavior: auto !important; }
 }
@@ -460,6 +543,7 @@ hr.sep { border: 0; border-top: 1px solid var(--rule); margin: 4px 0; width: 100
   <button class="icon-btn" id="menuBtn" type="button" aria-label="Open topics menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h11M4 17h16"/></svg></button>
   <a class="brand" href="#home"><span class="brand-tile">Va</span><span class="brand-name">Valence <span>AP Chemistry</span></span></a>
   <div class="spacer"></div>
+  <button class="pt-btn" id="ptBtn" type="button" aria-controls="ptPanel" aria-expanded="false" title="Periodic table (P)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h4v4H3zM17 4h4v4h-4zM3 8h4v4H3zM7 8h4v4H7zM13 8h4v4h-4zM17 8h4v4h-4zM3 12h18v4H3zM6 18.5h12"/></svg><span>Periodic table</span></button>
   <button class="icon-btn" id="themeBtn" type="button" aria-label="Toggle dark mode"></button>
 </header>
 <div class="layout">
@@ -7860,6 +7944,119 @@ App.register({
   window.addEventListener('hashchange', route);
   if (typeof MOLECULES !== 'undefined') MOLECULES.validate();
   route();
+})();
+
+/* ---- js/ptpanel.js ---- */
+/* Periodic table side panel: opens from the top bar or the right-edge tab on every page,
+   and stays open while you move between topics. */
+'use strict';
+(function () {
+  const h = U.h, $ = s => document.querySelector(s);
+  const body = document.body;
+  let built = false, selZ = U.store.get('ptPanelSel', 6), query = '';
+  const cells = {};
+
+  const panel = h('aside', { class: 'pt-panel', id: 'ptPanel', 'aria-label': 'Periodic table', hidden: true });
+  const tab = h('button', { type: 'button', class: 'pt-edge', 'aria-controls': 'ptPanel', 'aria-expanded': 'false', title: 'Periodic table (P)' }, h('span', { class: 'pt-edge-sym' }, 'H'), h('span', null, 'Periodic table'));
+  const scrim = h('div', { class: 'pt-scrim' });
+  body.append(panel, tab, scrim);
+  const topBtn = $('#ptBtn');
+
+  function open() {
+    if (!built) build();
+    panel.hidden = false;
+    requestAnimationFrame(() => body.classList.add('pt-open'));
+    [tab, topBtn].forEach(b => b && b.setAttribute('aria-expanded', 'true'));
+    U.store.set('ptPanelOpen', true);
+  }
+  function close() {
+    body.classList.remove('pt-open');
+    [tab, topBtn].forEach(b => b && b.setAttribute('aria-expanded', 'false'));
+    U.store.set('ptPanelOpen', false);
+    setTimeout(() => { if (!body.classList.contains('pt-open')) panel.hidden = true; }, 220);
+  }
+  const toggle = () => (body.classList.contains('pt-open') ? close() : open());
+  tab.addEventListener('click', open);
+  if (topBtn) topBtn.addEventListener('click', toggle);
+  scrim.addEventListener('click', close);
+  document.addEventListener('keydown', e => {
+    const tag = document.activeElement && document.activeElement.tagName;
+    const typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (document.activeElement && document.activeElement.isContentEditable);
+    if (e.key === 'Escape' && body.classList.contains('pt-open') && (!typing || panel.contains(document.activeElement))) { close(); (topBtn || tab).focus(); }
+    else if ((e.key === 'p' || e.key === 'P') && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); toggle(); }
+  });
+
+  function build() {
+    built = true;
+    const closeBtn = h('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Close periodic table', html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>' });
+    closeBtn.addEventListener('click', close);
+    const find = h('input', { type: 'text', class: 'pt-find', placeholder: 'Find by name, symbol or number', autocomplete: 'off', spellcheck: 'false', 'aria-label': 'Find an element' });
+    const grid = h('div', { class: 'pt-mini' });
+    for (const e of ELEMENTS.list) {
+      const row = e.fblock ? (e.period === 6 ? 9 : 10) : e.period;
+      const col = e.fblock ? 3 + e.fcol : e.group;
+      const c = h('button', { type: 'button', class: 'pt-cell', title: `${e.name}, ${e.mass}`, 'aria-label': `${e.Z} ${e.name}`, style: { gridRow: row, gridColumn: col, background: ELEMENTS.CAT_COLORS[e.cat] } },
+        h('span', { class: 'z' }, e.Z), h('span', { class: 's' }, e.sym), h('span', { class: 'm' }, e.mass < 100 ? e.mass.toFixed(2) : e.mass.toFixed(1)));
+      c.addEventListener('click', () => select(e.Z));
+      cells[e.Z] = c; grid.appendChild(c);
+    }
+    grid.appendChild(h('div', { class: 'pt-cell ph', style: { gridRow: 6, gridColumn: 3 } }, '57–71'));
+    grid.appendChild(h('div', { class: 'pt-cell ph', style: { gridRow: 7, gridColumn: 3 } }, '89–103'));
+    grid.appendChild(h('div', { class: 'pt-gap', style: { gridRow: 8, gridColumn: '1 / span 18' } }));
+    const legend = h('div', { class: 'legend pt-legend' }, Object.keys(ELEMENTS.CAT_NAMES).map(k => h('span', null, h('i', { style: { background: ELEMENTS.CAT_COLORS[k] } }), ELEMENTS.CAT_NAMES[k])));
+    const info = h('div', { class: 'pt-info' });
+    const full = h('a', { href: '#periodic-table', class: 'small' }, 'Open the full table with trend maps');
+    full.addEventListener('click', () => { if (innerWidth < 1200) close(); });
+    panel.append(
+      h('div', { class: 'pt-head' }, h('h2', null, 'Periodic table'), closeBtn),
+      h('div', { class: 'pt-body' }, find, grid, legend, info, full));
+
+    find.addEventListener('input', () => { query = find.value.trim().toLowerCase(); filter(); });
+    find.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { const m = matches(); if (m.length) select(m[0].Z); }
+    });
+
+    function matches() {
+      if (!query) return [];
+      return ELEMENTS.list.filter(e => String(e.Z) === query || e.sym.toLowerCase() === query || e.name.toLowerCase().startsWith(query))
+        .concat(ELEMENTS.list.filter(e => e.name.toLowerCase().includes(query) && !e.name.toLowerCase().startsWith(query) && e.sym.toLowerCase() !== query))
+        .sort((a, b) => (b.sym.toLowerCase() === query) - (a.sym.toLowerCase() === query));
+    }
+    function filter() {
+      const m = new Set(matches().map(e => e.Z));
+      for (const z in cells) cells[z].classList.toggle('dim', !!query && !m.has(+z));
+      if (m.size === 1) select([...m][0]);
+    }
+    function select(Z) {
+      selZ = Math.max(1, Math.min(118, Z));
+      U.store.set('ptPanelSel', selZ);
+      for (const z in cells) cells[z].classList.toggle('sel', +z === selZ);
+      detail();
+    }
+    function detail() {
+      U.clear(info);
+      const e = ELEMENTS.byZ[selZ];
+      const tile = h('div', { class: 'pt-big', style: { background: ELEMENTS.CAT_COLORS[e.cat] } },
+        h('span', { class: 'z' }, e.Z), h('b', null, e.sym), h('span', { class: 'm' }, e.mass));
+      const step = d => U.btn(d < 0 ? 'Previous' : 'Next', () => select(selZ + d), 'sm');
+      const kv = h('dl', { class: 'kv' });
+      const add = (k, v) => kv.append(h('dt', null, k), h('dd', { html: v == null || v === '' ? '—' : String(v) }));
+      add('Molar mass', e.mass + ' g/mol');
+      add('Group, period', (e.group ? 'Group ' + e.group : 'f-block') + ', period ' + e.period);
+      add('Electron configuration', ELEMENTS.configString(e.Z));
+      add('Valence electrons', e.valence ?? (e.cat === 'transition' ? 'varies' : null));
+      add('Electronegativity', e.en);
+      add('Atomic radius', e.radius ? e.radius + ' pm' : null);
+      add('First ionization energy', e.ie ? e.ie + ' kJ/mol' : null);
+      add('Electron affinity', e.ea != null ? (e.ea > 0 ? e.ea + ' kJ/mol released' : 'not stable (≤ 0)') : null);
+      add('State at 25 °C', e.state);
+      info.append(h('div', { class: 'pt-id' }, tile, h('div', { class: 'stack', style: { gap: '4px' } }, h('h3', null, e.name), h('span', { class: 'small muted' }, e.catName),
+        h('div', { class: 'row' }, step(-1), step(1)))), kv);
+    }
+    select(selZ);
+  }
+
+  if (U.store.get('ptPanelOpen', false) && innerWidth >= 1200) open();
 })();
 
 </script>

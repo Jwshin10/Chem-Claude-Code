@@ -12,7 +12,7 @@ No install, no build step, no internet needed (except for web fonts).
 - **From the source:** open `index.html` in any modern browser.
 - **Host it:** in the GitHub repo go to *Settings → Pages*, choose *Deploy from a branch*, pick your branch and the `/ (root)` folder. The site appears at `https://<user>.github.io/<repo>/`.
 
-Press <kbd>/</kbd> to search topics. Use the moon/sun button for dark mode. Every topic has a direct link such as `index.html#imf` or `index.html#titration`.
+Press <kbd>/</kbd> to search topics. Use the moon/sun button for dark mode. Open the periodic table from any page with the **Periodic table** button in the top bar, the tab on the right edge, or <kbd>P</kbd>; it stays open while you move between topics. Every topic has a direct link such as `index.html#imf` or `index.html#titration`.
 
 ## What's inside
 
@@ -51,6 +51,7 @@ js/core.js            module registry, DOM/control helpers, canvas + plotting
 js/data/              periodic table, molecule library, and the formula → structure builder
 js/modules/u1-*.js …  one file per topic, grouped by unit
 js/app.js             navigation, search, routing, home page
+js/ptpanel.js         periodic table side panel (available on every page)
 tools/build.mjs       bundles everything into dist/*.html
 ```
 
